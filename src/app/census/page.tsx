@@ -59,6 +59,31 @@ export default function CensusPage() {
     };
   }, []);
 
+  // The headline claim is computed from the rows that have landed, never remembered. (charter ban 1)
+  const spread = useMemo(() => {
+    const largest = CENSUS_SIZES[CENSUS_SIZES.length - 1];
+    const landed: Array<{ symbol: string; pct: number }> = [];
+    for (const token of TOKEN_LIST) {
+      const cell = rows[token.mint]?.[largest.key];
+      if (cell?.status === "ok" && Number.isFinite(cell.quote.fillCostPct)) {
+        landed.push({ symbol: token.symbol, pct: cell.quote.fillCostPct });
+      }
+    }
+    if (landed.length < 2) return null;
+    landed.sort((a, b) => a.pct - b.pct);
+    const best = landed[0];
+    const worst = landed[landed.length - 1];
+    if (best.pct <= 0) return null;
+    return {
+      multiple: `${Math.round(worst.pct / best.pct)}x`,
+      size: largest.label ?? largest.key,
+      bestSymbol: best.symbol,
+      bestPct: best.pct.toFixed(2),
+      worstSymbol: worst.symbol,
+      worstPct: worst.pct.toFixed(2),
+    };
+  }, [rows]);
+
   // fillCostPct (price impact plus transfer fee) is the fill's own cost, never negative.
   // allInCostPct nets off the basis and can go negative, which is wrong for a cost bar.
   const scaleMax = useMemo(() => {
@@ -169,11 +194,15 @@ export default function CensusPage() {
       ` }} />
 
       <div className="census-kicker">The Mark · Census</div>
-      <h1 className="census-headline">the gap is 0.20%, the fill is up to 9x larger</h1>
+      <h1 className="census-headline">the gap is the same for everyone. the fill is not.</h1>
       <p className="census-sub">
-        every tokenized stock is measured at three order sizes, live, and ranked by what the fill
-        actually costs. the gap between the token and the real share is a median 0.20%. the pool is
-        where the rest of the cost lives.
+        every tokenized stock measured at three order sizes, live, ranked by what the fill actually
+        costs.{" "}
+        {spread
+          ? `right now the worst pool charges ${spread.multiple} what the best one does on a ${spread.size} order: ${spread.worstSymbol} at ${spread.worstPct}% against ${spread.bestSymbol} at ${spread.bestPct}%.`
+          : "the spread between the best and worst pool is computed from the rows below as they land."}{" "}
+        the token-vs-share gap, which most of this field charts, measured a median 0.20% across 20
+        pairs on 2026-09-22.
       </p>
 
       <div className="census-status">

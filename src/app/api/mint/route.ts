@@ -30,8 +30,20 @@ export async function GET(request: Request) {
     }
 
     const data = await res.json();
+    // The RPC answers 200 with an error body for a bad request. Reporting that as an empty
+    // extension list made the page state "no transfer fee" as fact about a call that never
+    // answered. An unanswered call is an error, not an absence.
+    if (data.error) {
+      return NextResponse.json(
+        { error: data.error.message || "rpc error" },
+        { status: 502 }
+      );
+    }
+    if (!data.result?.value) {
+      return NextResponse.json({ error: "no such mint account" }, { status: 404 });
+    }
     return NextResponse.json(
-      { extensions: data.result?.value?.data?.parsed?.info?.extensions ?? [] },
+      { extensions: data.result.value.data?.parsed?.info?.extensions ?? [] },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch {

@@ -1,4 +1,4 @@
-import { getTransferFeePercentage, type ParsedExtension } from "../jupiter";
+import { getMultiplier, getTransferFeePercentage, type ParsedExtension } from "../jupiter";
 
 // Fixtures below are copied from the live responses on 2026-09-22:
 //   getAccountInfo(jsonParsed) for oPAiAikWTaFj9RYoRFD35ccfwhnMcB3ThgBZRHSkjTZ (tOpenAI)
@@ -30,6 +30,46 @@ describe("Jupiter API Client", () => {
 
     it("returns 0 for an empty extension array", () => {
       expect(getTransferFeePercentage([])).toBe(0);
+    });
+  });
+
+  describe("scaled UI multiplier: which of the two is live", () => {
+    // Copied from the live SPYx mint account on 2026-09-22. A scaledUiAmountConfig carries the
+    // current multiplier AND a newMultiplier with the timestamp it takes effect. Reading the
+    // first field once that timestamp has passed manufactured ~0.18% of cost on a $500 order.
+    const spyx: ParsedExtension[] = [
+      {
+        extension: "scaledUiAmountConfig",
+        state: {
+          authority: "S7vYFFWH6BjJyEsdrPQpqpYTqLTrPRK6KW3VwsJuRaS",
+          multiplier: "1.003909240011759",
+          newMultiplier: "1.005714560286254",
+          newMultiplierEffectiveTimestamp: 1781755200,
+        },
+      },
+    ];
+
+    it("takes newMultiplier once its effective timestamp has passed", () => {
+      // Jupiter's own usdPricePrescaled / usdPrice equalled exactly this on the same day.
+      expect(getMultiplier(spyx, 1790103463)).toBeCloseTo(1.005714560286254, 12);
+    });
+
+    it("keeps the current multiplier while the new one is still in the future", () => {
+      expect(getMultiplier(spyx, 1781755199)).toBeCloseTo(1.003909240011759, 12);
+    });
+
+    it("returns null when the mint read failed, so no caller can mistake it for 1", () => {
+      expect(getMultiplier(null)).toBeNull();
+    });
+
+    it("returns null when the mint carries no scaled config", () => {
+      expect(getMultiplier([{ extension: "metadataPointer", state: {} }])).toBeNull();
+    });
+  });
+
+  describe("a failed mint read is not an absence", () => {
+    it("reports null rather than zero when extensions could not be read", () => {
+      expect(getTransferFeePercentage(null)).toBeNull();
     });
   });
 

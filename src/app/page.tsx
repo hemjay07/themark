@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getQuote, getSwapTransaction } from "@/lib/jupiter";
+import { reconcileTransaction } from "@/lib/tx";
 import { TOKEN_LIST, getTokenBySymbol, USDC_MINT, getToken } from "@/lib/tokens";
 import type { QuoteResult, Receipt as ReceiptType } from "@/lib/types";
 import PriceAxis from "@/components/PriceAxis";
@@ -20,6 +21,7 @@ export default function Home() {
   const [connected, setConnected] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [signing, setSigning] = useState(false);
+  const [settling, setSettling] = useState(false);
 
   useEffect(() => {
     const checkConnection = async () => {
@@ -46,15 +48,34 @@ export default function Home() {
     const fetchQuote = async () => {
       setError("");
       const amountNum = parseFloat(amount);
-      if (!amountNum || amountNum < 10 || amountNum > 25000) return;
+      if (!amountNum || amountNum < 10 || amountNum > 25000) {
+        // Leaving the previous quote up would put a remembered number on the surface for an
+        // order the reader is not making. (charter ban 1)
+        setQuote(null);
+        setError(
+          amount.trim() === ""
+            ? "Enter an amount between $10 and $25,000 and this reads the pool live."
+            : "That amount is outside the range this quotes ($10 to $25,000), so there is nothing to show."
+        );
+        return;
+      }
 
       const token = getTokenBySymbol(selectedToken);
-      if (!token) return;
+      if (!token) {
+        setQuote(null);
+        setError("No such token in this list, so there is nothing to quote.");
+        return;
+      }
 
       setLoading(true);
       try {
         const amountInLamports = String(Math.floor(amountNum * 1e6));
-        const q = await getQuote(USDC_MINT, token.mint, amountInLamports);
+        // The line the reader sets is the transaction's own guard, not just a render condition.
+        // It was hardcoded at 50 bps, so a reader who set 0.10% signed a route that would fill
+        // five times worse than the line the surface asked them for.
+        const limit = Number.isFinite(worstFillPct) ? worstFillPct : 0;
+        const slippageBps = Math.max(1, Math.min(5000, Math.round(limit * 100)));
+        const q = await getQuote(USDC_MINT, token.mint, amountInLamports, slippageBps);
         if (q) {
           setQuote(q);
         } else {
@@ -73,18 +94,19 @@ export default function Home() {
       }
     };
 
-    if (!initialized) {
-      setInitialized(true);
-      fetchQuote();
-    } else {
-      const timer = setTimeout(() => {
-        if (amount && selectedToken) fetchQuote();
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [amount, selectedToken, initialized]);
+    // One debounce for every run, including the first: the previous shape fired once immediately
+    // AND again through the effect that `initialized` re-triggered, doubling every fold's calls.
+    const timer = setTimeout(fetchQuote, initialized ? 300 : 0);
+    setInitialized(true);
+    return () => clearTimeout(timer);
+  }, [amount, selectedToken, worstFillPct]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const shouldRefuse = quote && quote.fillCostPct > worstFillPct;
+  // A blank "worst fill" field yields NaN, and every comparison against NaN is false, which
+  // silently removed the only guard in the product. An unreadable line is treated as the
+  // tightest line, so the guard fails closed.
+  const limitIsSet = Number.isFinite(worstFillPct);
+  const effectiveLimit = limitIsSet ? worstFillPct : 0;
+  const shouldRefuse = Boolean(quote && quote.fillCostPct > effectiveLimit);
   const amountNum = parseFloat(amount) || 500;
   const fillPercent = ((amountNum - 10) / (25000 - 10)) * 100;
 
@@ -113,21 +135,45 @@ export default function Home() {
         VersionedTransaction.deserialize(bytes)
       );
 
-      const token = getToken(quote.outputMint);
+      // signAndSendTransaction resolves on SUBMISSION, not on landing. A transaction that hits
+      // its slippage limit, gets dropped or reverts still returns a signature here. So the
+      // receipt is not built from the quote's prediction: the chain is polled until the
+      // transaction is readable, and every figure below is decoded from what actually moved.
+      setSigning(false);
+      setSettling(true);
+      let landed: Awaited<ReturnType<typeof reconcileTransaction>> | null = null;
+      let lastErr = "";
+      for (let attempt = 0; attempt < 20; attempt++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        try {
+          landed = await reconcileTransaction(signature);
+          break;
+        } catch (e) {
+          lastErr = e instanceof Error ? e.message : String(e);
+        }
+      }
+      if (!landed) {
+        setError(
+          `Signed as ${signature.slice(0, 8)}…, but the chain has not returned a readable result yet, ` +
+            `so there is no receipt to show. ${lastErr}`
+        );
+        return;
+      }
+
       setReceipt({
-        txSignature: signature,
-        amountInUsdc: quote.amountInUsd,
-        amountOutTokens: quote.amountOutTokens,
-        filledPrice: quote.amountInUsd / quote.amountOutTokens,
-        referencePrice: quote.referencePrice,
-        costAboveReference:
-          (quote.amountInUsd / quote.amountOutTokens - quote.referencePrice) * quote.amountOutTokens,
-        costAboveReferencePct:
-          ((quote.amountInUsd / quote.amountOutTokens - quote.referencePrice) / quote.referencePrice) * 100,
-        savedVsWorstCase: ((worstFillPct - quote.fillCostPct) * quote.amountInUsd) / 100,
-        solscanLink: `https://solscan.io/tx/${signature}`,
-        timestamp: new Date().toISOString(),
-        tokenSymbol: token?.symbol || "Token",
+        txSignature: landed.signature,
+        amountInUsdc: landed.usdcSpent,
+        amountOutTokens: landed.tokenReceived,
+        filledPrice: landed.effectivePrice,
+        referencePrice: landed.referencePrice,
+        costAboveReference: landed.vsShareUsd,
+        costAboveReferencePct: landed.vsSharePct,
+        savedVsWorstCase: ((effectiveLimit - quote.fillCostPct) * landed.usdcSpent) / 100,
+        solscanLink: `https://solscan.io/tx/${landed.signature}`,
+        timestamp: landed.blockTime
+          ? new Date(landed.blockTime * 1000).toISOString()
+          : new Date().toISOString(),
+        tokenSymbol: landed.tokenSymbol,
         multiplier: quote.multiplier,
         transferFeePercentage: quote.transferFeePercentage,
       });
@@ -137,6 +183,7 @@ export default function Home() {
       setError("The transaction did not go through, so there is no receipt to show.");
     } finally {
       setSigning(false);
+      setSettling(false);
     }
   };
 
@@ -157,7 +204,10 @@ export default function Home() {
     }
   };
 
-  const netPercent = quote ? quote.allInCostPct - ((quote.referencePrice - quote.onChainPrice) / quote.referencePrice * 100) : 0;
+  // allInCostPct is ALREADY measured against the share: it is
+  // (paid - unitsReceived x sharePrice) / paid. Deducting the token/share basis a second time
+  // inverted the sign and made the fold claim a discount while the axis above it showed a cost.
+  const netPercent = quote ? quote.allInCostPct : 0;
   const isBelow = netPercent < 0;
 
   return (
@@ -177,7 +227,7 @@ export default function Home() {
           <PoolWell
             orderShare={quote && quote.liquidityUsd > 0 ? amountNum / quote.liquidityUsd : 0}
             fillPct={quote?.fillCostPct ?? 0}
-            limitPct={worstFillPct}
+            limitPct={effectiveLimit}
           />
           <div style={{
             marginTop: "8px",
@@ -189,8 +239,10 @@ export default function Home() {
             minHeight: "36px",
           }}>
             {quote
-              ? `the pool this order routes through, $${Math.round(quote.liquidityUsd).toLocaleString()} deep, read live. the trench is the router's own impact for this amount.`
-              : "the pool this order routes through, waiting on a live quote"}
+              ? `this token's pooled liquidity, $${Math.round(quote.liquidityUsd).toLocaleString()} read live${
+                  quote.routeLegs > 1 ? `, and the router splits this order across ${quote.routeLegs} legs` : ""
+                }. the trench is this order's cost measured against the line you set.`
+              : "the pool this order routes into, waiting on a live quote"}
           </div>
         </div>
 
@@ -199,11 +251,11 @@ export default function Home() {
         <div style={{ margin: "40px 0 36px", aspectRatio: "1000 / 300", width: "100%" }}>
           {quote && (
             <PriceAxis
-              tokenPrice={quote.onChainPrice}
+              tokenPrice={quote.effectivePrice}
               sharePrice={quote.referencePrice}
               fillPercent={quote.fillCostPct}
               amount={amountNum}
-              worstFillPct={worstFillPct}
+              worstFillPct={effectiveLimit}
             />
           )}
         </div>
@@ -405,7 +457,7 @@ export default function Home() {
               lineHeight: 1.5,
             }}>
               This fill costs <Odometer value={quote.fillCostPct} suffix="%" style={{ color: "var(--signal)" }} />.
-              You said you would take {worstFillPct.toFixed(1)}%.
+              You said you would take {limitIsSet ? `${effectiveLimit.toFixed(2)}%` : "no stated line, so nothing passes"}.
             </div>
             <div style={{
               fontFamily: '"JetBrains Mono", monospace',
@@ -419,7 +471,7 @@ export default function Home() {
         ) : (
           <button
             onClick={connected ? handleSign : handleConnect}
-            disabled={signing || (connected && !quote)}
+            disabled={signing || settling || (connected && !quote)}
             style={{
               width: "100%",
               padding: "16px",
@@ -438,7 +490,7 @@ export default function Home() {
             onMouseOver={(e) => (e.currentTarget.style.background = "var(--surface)")}
             onMouseOut={(e) => (e.currentTarget.style.background = "transparent")}
           >
-            {!connected ? "Connect wallet to sign" : signing ? "Signing…" : "Set and sign"}
+            {!connected ? "Connect wallet to sign" : signing ? "Signing…" : settling ? "Waiting for the chain…" : "Set and sign"}
           </button>
         )}
 

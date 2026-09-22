@@ -44,6 +44,10 @@ export interface QuoteResult {
   // Kept separate from allInCostPct, which nets off the basis and so can be either sign.
   fillCostPct: number;
   fillCostUsd: number;
+  // what this order actually pays per unit: amount in divided by units out. Not the market mid.
+  effectivePrice: number;
+  // how many legs the router split this order across, from routePlan
+  routeLegs: number;
   multiplier: number;
   multiplierKnown: boolean;
   liquidityUsd: number;

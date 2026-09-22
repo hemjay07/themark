@@ -70,7 +70,8 @@ interface MintFinding {
   symbol: string;
   mint: string;
   multiplier: number | null;
-  transferFeePct: number;
+  // null means the read failed, which is a different fact from "no fee"
+  transferFeePct: number | null;
   loading: boolean;
 }
 
@@ -108,7 +109,7 @@ function AddressRow({ label, value, href }: { label: string; value: string; href
 }
 
 function ReceiptBlock({ result }: { result: TxReconciliation }) {
-  const costColor = result.fillCostPct > 0 ? "var(--signal)" : "var(--success)";
+  const costColor = result.vsSharePct > 0 ? "var(--signal)" : "var(--success)";
   return (
     <div
       style={{
@@ -130,17 +131,19 @@ function ReceiptBlock({ result }: { result: TxReconciliation }) {
         }}
       >
         <div>
-          <div style={microLabelSmall}>fill cost vs reference share</div>
+          <div style={microLabelSmall}>
+            {result.vsSharePct >= 0 ? "paid over the reference share" : "paid under the reference share"}
+          </div>
           <div style={{ ...mono, fontSize: "clamp(26px, 6vw, 36px)", color: costColor }}>
-            <Odometer value={result.fillCostPct} suffix="%" decimals={2} />
+            <Odometer value={Math.abs(result.vsSharePct)} suffix="%" decimals={2} />
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={microLabelSmall}>in dollars</div>
           <div style={{ ...mono, fontSize: "18px", color: costColor }}>
             <Odometer
-              value={Math.abs(result.fillCostUsd)}
-              prefix={result.fillCostUsd >= 0 ? "$" : "-$"}
+              value={Math.abs(result.vsShareUsd)}
+              prefix="$"
               decimals={2}
             />
           </div>
@@ -178,7 +181,7 @@ function ProofPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [findings, setFindings] = useState<MintFinding[]>(
-    TOKEN_LIST.map((t) => ({ symbol: t.symbol, mint: t.mint, multiplier: null, transferFeePct: 0, loading: true }))
+    TOKEN_LIST.map((t) => ({ symbol: t.symbol, mint: t.mint, multiplier: null, transferFeePct: null, loading: true }))
   );
 
   useEffect(() => {
@@ -332,16 +335,28 @@ function ProofPage() {
                     color: f.multiplier && f.multiplier !== 1 ? "var(--signal)" : "var(--text-dim)",
                   }}
                 >
-                  {f.loading ? "…" : f.multiplier === null ? "no scaled multiplier" : `×${f.multiplier.toFixed(8)}`}
+                  {f.loading
+                    ? "…"
+                    : f.multiplier === null
+                      ? f.transferFeePct === null
+                        ? "mint could not be read"
+                        : "no scaled multiplier"
+                      : `×${f.multiplier.toFixed(8)}`}
                 </span>
                 <span
                   style={{
                     ...mono,
                     fontSize: "12px",
-                    color: f.transferFeePct > 0 ? "var(--signal)" : "var(--text-dim)",
+                    color: f.transferFeePct && f.transferFeePct > 0 ? "var(--signal)" : "var(--text-dim)",
                   }}
                 >
-                  {f.loading ? "…" : f.transferFeePct > 0 ? `${f.transferFeePct.toFixed(2)}% transfer fee` : "no transfer fee"}
+                  {f.loading
+                    ? "…"
+                    : f.transferFeePct === null
+                      ? "fee could not be read"
+                      : f.transferFeePct > 0
+                        ? `${f.transferFeePct.toFixed(2)}% transfer fee`
+                        : "no transfer fee"}
                 </span>
               </div>
             ))}

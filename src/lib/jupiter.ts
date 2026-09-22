@@ -13,33 +13,53 @@ export interface ParsedExtension {
 
 // Reads the mint's Token-2022 extensions through this app's own route, because the public
 // RPC refuses browser-origin requests with 403.
-export async function getMintExtensions(mint: string): Promise<ParsedExtension[]> {
+// Returns null when the read FAILED, and an array when it succeeded. The two are different
+// facts: an empty array means the mint carries no extensions, null means nobody knows.
+// Collapsing both to [] let the surface print "no transfer fee" about a call that never answered.
+export async function getMintExtensions(mint: string): Promise<ParsedExtension[] | null> {
   try {
     const res = await fetch(`/api/mint?mint=${encodeURIComponent(mint)}`, {
       headers: { Accept: "application/json" },
       cache: "no-store",
     });
-    if (!res.ok) return [];
+    if (!res.ok) return null;
     const data = await res.json();
-    return Array.isArray(data.extensions) ? data.extensions : [];
+    return Array.isArray(data.extensions) ? data.extensions : null;
   } catch (err) {
     console.error("Failed to fetch mint extensions:", err);
-    return [];
+    return null;
   }
 }
 
 // The scaled UI multiplier from the mint account, which is the authority for it.
-// Returns null when the mint carries no scaledUiAmountConfig at all.
-export function getMultiplier(extensions: ParsedExtension[]): number | null {
+// A scaledUiAmountConfig carries TWO multipliers: the current one and a newMultiplier that takes
+// effect at newMultiplierEffectiveTimestamp. Once that timestamp has passed the new one IS the
+// live multiplier and the old field is stale. Verified on SPYx 2026-09-22: the timestamp
+// (1781755200) passed three months ago, and Jupiter's own usdPricePrescaled / usdPrice equals
+// newMultiplier (1.005714560286254) exactly, not multiplier (1.003909240011759).
+// Reading the stale field manufactured ~0.18% of cost on a $500 order out of nothing.
+export function getMultiplier(extensions: ParsedExtension[] | null, nowSeconds = Date.now() / 1000): number | null {
+  if (!extensions) return null;
   const cfg = extensions.find((e) => e.extension === "scaledUiAmountConfig");
-  const raw = cfg?.state?.multiplier;
-  if (raw === undefined || raw === null) return null;
-  const value = typeof raw === "number" ? raw : parseFloat(String(raw));
-  return Number.isFinite(value) ? value : null;
+  if (!cfg?.state) return null;
+
+  const num = (raw: unknown): number | null => {
+    if (raw === undefined || raw === null) return null;
+    const v = typeof raw === "number" ? raw : parseFloat(String(raw));
+    return Number.isFinite(v) ? v : null;
+  };
+
+  const current = num(cfg.state.multiplier);
+  const next = num(cfg.state.newMultiplier);
+  const effectiveAt = num(cfg.state.newMultiplierEffectiveTimestamp);
+
+  if (next !== null && effectiveAt !== null && nowSeconds >= effectiveAt) return next;
+  return current;
 }
 
 // Transfer fee in percent, from the newer fee schedule. Returns 0 when the mint has no fee.
-export function getTransferFeePercentage(extensions: ParsedExtension[]): number {
+export function getTransferFeePercentage(extensions: ParsedExtension[] | null): number | null {
+  if (!extensions) return null;
   const cfg = extensions.find((e) => e.extension === "transferFeeConfig");
   const bps = cfg?.state?.newerTransferFee?.transferFeeBasisPoints;
   return typeof bps === "number" ? bps / 100 : 0;
@@ -116,9 +136,23 @@ export async function getQuote(
 
     // The multiplier comes from the price response itself; the transfer fee needs the mint account.
     const extensions = await getMintExtensions(outputMint);
-    const transferFeePercentage = getTransferFeePercentage(extensions);
+    const readFee = getTransferFeePercentage(extensions);
+    if (readFee === null) {
+      // A mint whose fee could not be read would silently drop a real 20 bps out of the cost.
+      console.error("Mint extensions unavailable; refusing to quote a cost that may omit a fee.");
+      return null;
+    }
+    const transferFeePercentage = readFee;
     const onChainMultiplier = getMultiplier(extensions);
-    const feedMultiplier = price.scaledUiConfig?.multiplier;
+    const feedCfg = price.scaledUiConfig;
+    const feedEffectiveAt = feedCfg?.newMultiplierEffectiveAt
+      ? Date.parse(feedCfg.newMultiplierEffectiveAt) / 1000
+      : null;
+    const feedMultiplier =
+      feedCfg && typeof feedCfg.newMultiplier === "number" &&
+      feedEffectiveAt !== null && Date.now() / 1000 >= feedEffectiveAt
+        ? feedCfg.newMultiplier
+        : feedCfg?.multiplier;
     const resolvedMultiplier =
       onChainMultiplier ?? (typeof feedMultiplier === "number" ? feedMultiplier : null);
     const multiplierKnown = resolvedMultiplier !== null;
@@ -162,7 +196,14 @@ export async function getQuote(
     // Jupiter returns priceImpactPct as a FRACTION. Verified 2026-09-22 against PLTRx: a $500
     // order quotes 0.00465 and a $25,000 order 0.01689, a delta of 1.22 points, and the effective
     // price moves $184.45 -> $186.75, which is 1.25%. So the field is a fraction, not a percent.
-    const impactPct = Math.abs(Number(quoteData.priceImpactPct) || 0) * 100;
+    const rawImpact = Number(quoteData.priceImpactPct);
+    if (!Number.isFinite(rawImpact)) {
+      // A fill cost of 0.00% would drive the refusal gate to accept and flatten the device.
+      // A guess is worse than no guard. (charter ban 1)
+      console.error("Quote carried no usable price impact; refusing to quote.");
+      return null;
+    }
+    const impactPct = Math.abs(rawImpact) * 100;
     const fillCostPct = impactPct + transferFeePercentage;
     const fillCostUsd = (amountInUsd * fillCostPct) / 100;
 
@@ -180,6 +221,8 @@ export async function getQuote(
       allInCostPct,
       fillCostPct,
       fillCostUsd,
+      effectivePrice: amountOutTokens > 0 ? amountInUsd / amountOutTokens : 0,
+      routeLegs: Array.isArray(quoteData.routePlan) ? quoteData.routePlan.length : 0,
       multiplier,
       multiplierKnown,
       liquidityUsd: price.liquidity,

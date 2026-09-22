@@ -19,8 +19,10 @@ export interface TxReconciliation {
   tokenSymbol: string;
   effectivePrice: number;
   referencePrice: number;
-  fillCostUsd: number;
-  fillCostPct: number;
+  // Paid, minus the share value of what was received. Nets off the token/share basis, so it can
+  // run either way. It is not the route's fill cost.
+  vsShareUsd: number;
+  vsSharePct: number;
   feeSol: number;
   blockTime: number | null;
   slot: number;
@@ -83,9 +85,20 @@ export async function reconcileTransaction(signature: string): Promise<TxReconci
   const signer = signerPubkey(tx);
   if (!signer) throw new Error("could not identify a signer in this transaction");
 
+  // A transaction that failed on chain must never be reconciled into a receipt.
+  if (tx?.meta?.err) {
+    throw new Error("this transaction failed on chain, so there is nothing to reconcile");
+  }
+
   const changes = balanceChanges(tx, signer);
-  const spent = changes.find((c) => c.mint === USDC_MINT && c.delta < 0);
-  const received = changes.find((c) => c.mint !== USDC_MINT && c.delta > 0);
+  // Largest leg, not first match: a route can leave residual wSOL or an intermediate token in a
+  // signer-owned account, and first-match would reconcile the wrong one into a confident price.
+  const spent = changes
+    .filter((c) => c.mint === USDC_MINT && c.delta < 0)
+    .sort((a, b) => a.delta - b.delta)[0];
+  const received = changes
+    .filter((c) => c.mint !== USDC_MINT && c.delta > 0)
+    .sort((a, b) => b.delta - a.delta)[0];
   if (!spent || !received) {
     throw new Error("this signature has no USDC-in, token-out swap for its signer");
   }
@@ -104,8 +117,11 @@ export async function reconcileTransaction(signature: string): Promise<TxReconci
     throw new Error("no live reference price for this mint right now; refusing to reconcile");
   }
 
-  const fillCostUsd = usdcSpent - tokenReceived * (referencePrice as number);
-  const fillCostPct = (fillCostUsd / usdcSpent) * 100;
+  // This nets the token/share basis off the impact, so it can be either sign. It is NOT the
+  // fill cost, which is what the route charges and is never negative. Naming it fillCost put a
+  // green "-0.10%" on a swap that paid real impact.
+  const vsShareUsd = usdcSpent - tokenReceived * (referencePrice as number);
+  const vsSharePct = (vsShareUsd / usdcSpent) * 100;
   const feeSol = (tx?.meta?.fee ?? 0) / 1e9;
   const token = getToken(received.mint);
 
@@ -118,8 +134,8 @@ export async function reconcileTransaction(signature: string): Promise<TxReconci
     tokenSymbol: token?.symbol ?? `${received.mint.slice(0, 4)}…`,
     effectivePrice,
     referencePrice: referencePrice as number,
-    fillCostUsd,
-    fillCostPct,
+    vsShareUsd,
+    vsSharePct,
     feeSol,
     blockTime: tx?.blockTime ?? null,
     slot: tx?.slot ?? 0,

@@ -164,8 +164,30 @@ export default function PoolWell({ orderShare, fillPct, limitPct }: PoolWellProp
 
     const gl = canvas.getContext("webgl2", { antialias: true });
     if (!gl) {
-      // No WebGL2 here. The page still works; it simply does not draw the pool.
+      // No WebGL2 here. Say so rather than leaving a silent black rectangle under a caption
+      // that narrates a trench nobody can see.
       canvas.dataset.webgl = "unavailable";
+      const ctx2d = canvas.getContext("2d");
+      if (ctx2d) {
+        const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+        canvas.width = Math.max(1, Math.floor(canvas.clientWidth * dpr));
+        canvas.height = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+        ctx2d.fillStyle = "#0B0B10";
+        ctx2d.fillRect(0, 0, canvas.width, canvas.height);
+        ctx2d.fillStyle = "#71717A";
+        ctx2d.font = `${12 * dpr}px "JetBrains Mono", monospace`;
+        ctx2d.textAlign = "center";
+        ctx2d.fillText(
+          "this browser has no WebGL2, so the pool is not drawn here",
+          canvas.width / 2,
+          canvas.height / 2
+        );
+        ctx2d.fillText(
+          "every number below is still read live",
+          canvas.width / 2,
+          canvas.height / 2 + 20 * dpr
+        );
+      }
       return;
     }
 
