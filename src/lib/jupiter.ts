@@ -165,6 +165,7 @@ export async function getQuote(
       multiplier,
       multiplierKnown,
       liquidityUsd: price.liquidity,
+      raw: quoteData,
       transferFeePercentage: transferFeePercentage > 0 ? transferFeePercentage : undefined,
     };
   } catch (err) {

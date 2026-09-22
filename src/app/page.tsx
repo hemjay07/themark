@@ -1,21 +1,25 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getQuote } from "@/lib/jupiter";
+import { getQuote, getSwapTransaction } from "@/lib/jupiter";
 import { TOKEN_LIST, getTokenBySymbol, USDC_MINT, getToken } from "@/lib/tokens";
 import type { QuoteResult, Receipt as ReceiptType } from "@/lib/types";
 import PriceAxis from "@/components/PriceAxis";
+import PoolDrain from "@/components/PoolDrain";
+import PoolWell from "@/components/PoolWell";
+import Odometer from "@/components/Odometer";
 
 export default function Home() {
   const [amount, setAmount] = useState("500");
   const [selectedToken, setSelectedToken] = useState("PLTRx");
   const [quote, setQuote] = useState<QuoteResult | null>(null);
   const [receipt, setReceipt] = useState<ReceiptType | null>(null);
-  const [worstFillPct, setWorstFillPct] = useState(2.5);
+  const [worstFillPct, setWorstFillPct] = useState(0.5);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [connected, setConnected] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [signing, setSigning] = useState(false);
 
   useEffect(() => {
     const checkConnection = async () => {
@@ -88,44 +92,68 @@ export default function Home() {
     if (!quote || shouldRefuse) return;
 
     const phantom = (window as any)?.solana;
-    if (!phantom?.isConnected) {
-      alert("Please connect Phantom wallet first");
+    if (!phantom?.isConnected || !phantom.publicKey) {
+      setError("Connect a wallet before signing.");
       return;
     }
 
-    const token = getToken(quote.outputMint);
-    const mockReceipt: ReceiptType = {
-      txSignature: "mock_" + Date.now(),
-      amountInUsdc: quote.amountInUsd,
-      amountOutTokens: quote.amountOutTokens,
-      filledPrice: quote.amountInUsd / quote.amountOutTokens,
-      referencePrice: quote.referencePrice,
-      costAboveReference: (quote.amountInUsd / quote.amountOutTokens - quote.referencePrice) * quote.amountOutTokens,
-      costAboveReferencePct: ((quote.amountInUsd / quote.amountOutTokens - quote.referencePrice) / quote.referencePrice) * 100,
-      savedVsWorstCase: (worstFillPct - quote.allInCostPct) * quote.amountInUsd / 100,
-      solscanLink: "#",
-      timestamp: new Date().toISOString(),
-      tokenSymbol: token?.symbol || "Token",
-      multiplier: quote.multiplier,
-      transferFeePercentage: quote.transferFeePercentage,
-    };
+    setSigning(true);
+    setError("");
+    try {
+      const swapTx = await getSwapTransaction(quote.raw, phantom.publicKey.toString());
+      if (!swapTx) throw new Error("the swap could not be built");
 
-    setReceipt(mockReceipt);
-    setQuote(null);
+      // Loaded only when someone actually signs, so the fold stays inside the charter's byte budget.
+      const { VersionedTransaction } = await import("@solana/web3.js");
+      const binary = atob(swapTx);
+      const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+
+      // Phantom signs and sends; the signature below is the one the cluster returned.
+      const { signature } = await phantom.signAndSendTransaction(
+        VersionedTransaction.deserialize(bytes)
+      );
+
+      const token = getToken(quote.outputMint);
+      setReceipt({
+        txSignature: signature,
+        amountInUsdc: quote.amountInUsd,
+        amountOutTokens: quote.amountOutTokens,
+        filledPrice: quote.amountInUsd / quote.amountOutTokens,
+        referencePrice: quote.referencePrice,
+        costAboveReference:
+          (quote.amountInUsd / quote.amountOutTokens - quote.referencePrice) * quote.amountOutTokens,
+        costAboveReferencePct:
+          ((quote.amountInUsd / quote.amountOutTokens - quote.referencePrice) / quote.referencePrice) * 100,
+        savedVsWorstCase: ((worstFillPct - quote.allInCostPct) * quote.amountInUsd) / 100,
+        solscanLink: `https://solscan.io/tx/${signature}`,
+        timestamp: new Date().toISOString(),
+        tokenSymbol: token?.symbol || "Token",
+        multiplier: quote.multiplier,
+        transferFeePercentage: quote.transferFeePercentage,
+      });
+    } catch (err) {
+      // No receipt is ever shown for a transaction that did not land. (charter ban 1)
+      console.error("Sign failed:", err);
+      setError("The transaction did not go through, so there is no receipt to show.");
+    } finally {
+      setSigning(false);
+    }
   };
 
   const handleConnect = async () => {
     const phantom = (window as any)?.solana;
     if (!phantom) {
-      alert("Phantom wallet not installed");
+      setError("No Solana wallet found in this browser.");
       return;
     }
 
     try {
       await phantom.connect();
       setConnected(true);
+      setError("");
     } catch (err) {
-      alert("Connection failed: " + String(err));
+      console.error("Connect failed:", err);
+      setError("The wallet did not connect.");
     }
   };
 
@@ -152,6 +180,32 @@ export default function Home() {
           letterSpacing: "0.12em",
         }}>The Mark · A</div>
 
+        {/* The device: the pool this order routes through, with the order carved into it.
+            Its trench depth is the impact the router returned for this exact amount. */}
+        <div style={{ margin: "28px 0 20px" }}>
+          <PoolWell
+            orderShare={quote && quote.liquidityUsd > 0 ? amountNum / quote.liquidityUsd : 0}
+            fillPct={quote?.allInCostPct ?? 0}
+            limitPct={worstFillPct}
+          />
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginTop: "8px",
+            fontSize: "11px",
+            fontFamily: '"JetBrains Mono", monospace',
+            color: "var(--text-dim)",
+            letterSpacing: "0.04em",
+          }}>
+            <span>the pool this order routes through</span>
+            <span>
+              {quote
+                ? `depth modelled from $${Math.round(quote.liquidityUsd).toLocaleString()} live; trench is the router's own impact`
+                : "waiting on a live quote"}
+            </span>
+          </div>
+        </div>
+
         {/* Price Axis. The wrapper holds the axis's exact aspect ratio before the quote
             lands, so the arriving numbers do not push the page down. */}
         <div style={{ margin: "40px 0 36px", aspectRatio: "1000 / 300", width: "100%" }}>
@@ -161,6 +215,7 @@ export default function Home() {
               sharePrice={quote.referencePrice}
               fillPercent={quote.allInCostPct}
               amount={amountNum}
+              worstFillPct={worstFillPct}
             />
           )}
         </div>
@@ -177,7 +232,7 @@ export default function Home() {
           lineHeight: 1.2,
         } as any}>
           You end up <span style={{ color: isBelow ? "var(--success)" : "var(--signal)" }}>
-            {Math.abs(netPercent).toFixed(2)}
+            <Odometer value={Math.abs(netPercent)} />
           </span>% {isBelow ? "below" : "above"} the share
         </h1>
         <style>
@@ -221,7 +276,7 @@ export default function Home() {
           <div style={{ position: "relative" }}>
             <input
               type="range"
-              min="10"
+              min="100"
               max="25000"
               step="100"
               value={amount}
@@ -250,30 +305,19 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Receipt Section */}
+        {/* The pool, drawn as depth blocks the order eats. Live liquidity from the quote. */}
         <div style={{
           background: "var(--bg)",
           border: "1px solid var(--border)",
           borderRadius: "6px",
           padding: "20px",
           marginBottom: "32px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px",
         }}>
-          <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-            padding: "8px 0",
-            fontSize: "14px",
-            borderBottom: "1px solid var(--border)",
-          }}>
-            <span style={{ color: "var(--text-muted)", fontSize: "13px" }}>Your order takes</span>
-            <span style={{ color: "var(--text-primary)", fontFamily: '"JetBrains Mono", monospace', textAlign: "right" }}>
-              {quote ? `${((amountNum / quote.liquidityUsd) * 100).toFixed(2)}% of pool's $${(quote.liquidityUsd / 1000).toFixed(0)}K` : "waiting on a live quote"}
-            </span>
-          </div>
+          <PoolDrain
+            amountUsd={amountNum}
+            liquidityUsd={quote?.liquidityUsd ?? 0}
+            refusing={Boolean(shouldRefuse)}
+          />
           <div style={{
             fontSize: "11px",
             color: "var(--text-dim)",
@@ -341,35 +385,53 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Sign Button */}
-        <button
-          onClick={handleSign}
-          disabled={shouldRefuse || !quote || !connected}
-          style={{
-            width: "100%",
-            padding: "16px",
-            background: shouldRefuse ? "transparent" : "transparent",
-            border: `1px solid ${shouldRefuse ? "var(--signal)" : "var(--border)"}`,
-            color: shouldRefuse ? "var(--signal)" : "var(--text-primary)",
-            fontFamily: '"Archivo", sans-serif',
-            fontSize: "14px",
-            textTransform: "uppercase",
-            letterSpacing: "0.1em",
-            cursor: shouldRefuse || !quote || !connected ? "not-allowed" : "pointer",
-            borderRadius: "4px",
-            transition: "all 120ms ease-out",
-            marginTop: "24px",
-          }}
-          onMouseOver={(e) => !shouldRefuse && (e.currentTarget.style.background = "var(--surface)")}
-          onMouseOut={(e) => !shouldRefuse && (e.currentTarget.style.background = "transparent")}
-        >
-          {!connected ? "Connect wallet" : shouldRefuse ? "This order exceeds your limit" : "Set and sign"}
-        </button>
-
-        {/* Wallet Connect */}
-        {!connected && (
+        {/* The sign control. Above the line the founder set, it stops being a button and becomes
+            a refusal that states the number: the product's whole claim, made visible. */}
+        {shouldRefuse && quote ? (
+          <div
+            data-refusal
+            style={{
+              width: "100%",
+              marginTop: "24px",
+              padding: "20px",
+              border: "1px solid var(--signal)",
+              borderRadius: "4px",
+              background: "rgba(196, 38, 29, 0.06)",
+              animation: "refuse-in 180ms cubic-bezier(0.23, 1, 0.32, 1)",
+            }}
+          >
+            <div style={{
+              fontFamily: '"Archivo", sans-serif',
+              fontSize: "14px",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "var(--signal)",
+              marginBottom: "10px",
+            }}>
+              Refused
+            </div>
+            <div style={{
+              fontFamily: '"JetBrains Mono", monospace',
+              fontSize: "13px",
+              color: "var(--text-primary)",
+              lineHeight: 1.5,
+            }}>
+              This fill costs <Odometer value={quote.allInCostPct} suffix="%" style={{ color: "var(--signal)" }} />.
+              You said you would take {worstFillPct.toFixed(1)}%.
+            </div>
+            <div style={{
+              fontFamily: '"JetBrains Mono", monospace',
+              fontSize: "11px",
+              color: "var(--text-dim)",
+              marginTop: "10px",
+            }}>
+              lower the amount, or raise the line you set
+            </div>
+          </div>
+        ) : (
           <button
-            onClick={handleConnect}
+            onClick={connected ? handleSign : handleConnect}
+            disabled={signing || (connected && !quote)}
             style={{
               width: "100%",
               padding: "16px",
@@ -380,15 +442,15 @@ export default function Home() {
               fontSize: "14px",
               textTransform: "uppercase",
               letterSpacing: "0.1em",
-              cursor: "pointer",
+              cursor: signing || (connected && !quote) ? "not-allowed" : "pointer",
               borderRadius: "4px",
               transition: "all 120ms ease-out",
-              marginTop: "12px",
+              marginTop: "24px",
             }}
             onMouseOver={(e) => (e.currentTarget.style.background = "var(--surface)")}
             onMouseOut={(e) => (e.currentTarget.style.background = "transparent")}
           >
-            Connect Phantom Wallet
+            {!connected ? "Connect wallet to sign" : signing ? "Signing…" : "Set and sign"}
           </button>
         )}
 

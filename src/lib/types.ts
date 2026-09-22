@@ -45,6 +45,8 @@ export interface QuoteResult {
   liquidityUsd: number;
   transferFeePercentage?: number;
   swapTransaction?: string; // base64
+  // the untouched Jupiter quote response; /swap/v1/swap requires it verbatim
+  raw: unknown;
 }
 
 export interface Receipt {

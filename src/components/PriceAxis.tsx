@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCountUp } from "@/lib/useCountUp";
 
 interface PriceAxisProps {
   tokenPrice: number;
   sharePrice: number;
   fillPercent: number;
   amount: number;
+  // the line the founder set; it is the right-hand end of the track
+  worstFillPct: number;
 }
 
 export default function PriceAxis({
@@ -14,45 +16,47 @@ export default function PriceAxis({
   sharePrice,
   fillPercent,
   amount,
+  worstFillPct,
 }: PriceAxisProps) {
-  const [key, setKey] = useState(0);
 
-  // Trigger animation on mount and when prices change
-  useEffect(() => {
-    setKey((k) => k + 1);
-  }, [tokenPrice, sharePrice]);
+  // charter hero_technique: number-odometer. These travel to their new value.
+  const shownTokenPrice = useCountUp(tokenPrice);
+  const shownSharePrice = useCountUp(sharePrice);
+  const shownFill = useCountUp(fillPercent);
 
-  // Calculate SVG positions
-  // Linear mapping: token at 12%, share at 78%
-  const priceRange = sharePrice - tokenPrice;
-  const priceToSvgX = (price: number) => {
-    const percent = 12 + ((price - tokenPrice) / priceRange) * 66;
-    return percent * 10; // Convert to SVG units (1000 width)
-  };
 
-  const tokenX = priceToSvgX(tokenPrice);
-  const shareX = priceToSvgX(sharePrice);
+  // The track is the line you set. Its left end is what you pay now, its right end is the worst
+  // fill you said you would take. Everything else is drawn on that one scale, so the bar reaching
+  // the end of the track IS the refusal, rather than a number quietly exceeding a threshold.
+  const TRACK_START = 120;
+  const TRACK_END = 900;
+  const limitPct = Math.max(worstFillPct, 0.01);
+  const pctToSvgX = (pct: number) =>
+    TRACK_START + Math.max(0, Math.min(1, pct / limitPct)) * (TRACK_END - TRACK_START);
 
-  // Calculate where the order lands (bar end)
-  const fillInPrice = sharePrice * (fillPercent / 100);
-  const barEndPrice = tokenPrice + fillInPrice;
-  // When the gap between the two prices is pennies, a fill of a fraction of a percent lands
-  // far outside the drawn range, so the bar is clamped to the canvas rather than running off it.
-  const barEndX = Math.min(960, priceToSvgX(barEndPrice));
+  const tokenX = TRACK_START;
+  // where the real share sits on the same scale: the basis gap, as a percentage of what you pay
+  const basisPct = tokenPrice > 0 ? ((sharePrice - tokenPrice) / tokenPrice) * 100 : 0;
+  const shareX = pctToSvgX(Math.abs(basisPct));
 
-  // Bar is anchored to token tick, width is the distance to bar end
+  const shownLimit = useCountUp(limitPct);
+  const atLimit = fillPercent >= limitPct;
+  const barEndX = pctToSvgX(fillPercent);
+
+  // Bar is anchored to the tick you pay from; its length is the cost as a share of your line.
   const barWidth = Math.max(2, barEndX - tokenX);
-  const barColor = barEndPrice >= sharePrice ? "#C4261D" : "#0B7A3B";
-  const captionFill = barEndPrice >= sharePrice ? "#C4261D" : "#9B978D";
+  const barColor = atLimit ? "#C4261D" : "#0B7A3B";
+  const captionFill = atLimit ? "#C4261D" : "#9B978D";
 
   // Calculate caption position
-  const captionX = Math.min(960, Math.max(60, barEndX));
-  const captionAnchor = barEndX > 900 ? "end" : "middle";
+  // The caption follows the bar end but never leaves the canvas: it anchors start near the
+  // left edge and end near the right, so a tiny fill does not push the text off the frame.
+  const captionAnchor = barEndX < 200 ? "start" : barEndX > 800 ? "end" : "middle";
+  const captionX = Math.min(980, Math.max(20, barEndX));
 
   return (
     <div
-      key={key}
-      data-device="mark-axis-a"
+      data-axis="mark-axis-a"
     >
       <svg
         viewBox="0 0 1000 300"
@@ -83,93 +87,44 @@ export default function PriceAxis({
           </style>
         </defs>
 
-        {/* Token price label */}
-        <text
-          x={tokenX}
-          y="64"
-          textAnchor="middle"
-          fontSize="62"
-          fill="#FAFAFA"
-          fontFamily="JetBrains Mono"
-        >
-          ${tokenPrice.toFixed(2)}
+        {/* The two prices sit at fixed ends of the header so they never collide, whatever the
+            basis gap does. The ticks below them carry the position. */}
+        <text x="120" y="64" textAnchor="start" fontSize="58" fill="#FAFAFA" fontFamily="JetBrains Mono">
+          ${shownTokenPrice.toFixed(2)}
         </text>
-        <text
-          x={tokenX}
-          y="106"
-          textAnchor="middle"
-          fontSize="25"
-          fill="#71717A"
-          fontFamily="Archivo"
-          letterSpacing="0.14em"
-        >
+        <text x="120" y="106" textAnchor="start" fontSize="24" fill="#71717A" fontFamily="Archivo" letterSpacing="0.14em">
           YOU PAY
         </text>
 
-        {/* Share price label */}
-        <text
-          x={shareX}
-          y="64"
-          textAnchor="middle"
-          fontSize="62"
-          fill="#FAFAFA"
-          fontFamily="JetBrains Mono"
-        >
-          ${sharePrice.toFixed(2)}
+        <text x="900" y="64" textAnchor="end" fontSize="58" fill="#FAFAFA" fontFamily="JetBrains Mono">
+          ${shownSharePrice.toFixed(2)}
         </text>
-        <text
-          x={shareX}
-          y="106"
-          textAnchor="middle"
-          fontSize="25"
-          fill="#71717A"
-          fontFamily="Archivo"
-          letterSpacing="0.14em"
-        >
+        <text x="900" y="106" textAnchor="end" fontSize="24" fill="#71717A" fontFamily="Archivo" letterSpacing="0.14em">
           THE SHARE
         </text>
 
-        {/* Gap fill */}
-        <rect
-          x={tokenX + 2}
-          y="150"
-          width={shareX - tokenX - 4}
-          height="90"
-          fill="#FAFAFA"
-          opacity="0.05"
-        />
+        {/* The track: what you pay at the left, the line you set at the right. */}
+        <rect x={TRACK_START} y="168" width={TRACK_END - TRACK_START} height="54" fill="#FAFAFA" opacity="0.04" />
 
         {/* Baseline */}
         <line x1="0" y1="240" x2="1000" y2="240" stroke="#27272A" strokeWidth="3" />
 
-        {/* Ticks */}
-        <line
-          x1={tokenX}
-          y1="140"
-          x2={tokenX}
-          y2="250"
-          stroke="#FAFAFA"
-          strokeWidth="4"
-        />
-        <line
-          x1={shareX}
-          y1="140"
-          x2={shareX}
-          y2="250"
-          stroke="#FAFAFA"
-          strokeWidth="4"
-        />
+        {/* The tick you pay from */}
+        <line x1={tokenX} y1="150" x2={tokenX} y2="252" stroke="#FAFAFA" strokeWidth="4" />
 
-        {/* Order bar - anchored to token tick */}
-        <rect
-          x={tokenX + 2}
-          y="179"
-          width={barWidth}
-          height="32"
-          fill={barColor}
-        />
+        {/* Where the real share falls on this same scale */}
+        <line x1={shareX} y1="158" x2={shareX} y2="248" stroke="#FAFAFA" strokeWidth="2" strokeDasharray="6 6" opacity="0.7" />
 
-        {/* Bar label - split into two lines to avoid clipping */}
+        {/* The line you set: the right end of the track */}
+        <line x1={TRACK_END} y1="150" x2={TRACK_END} y2="252" stroke="#C4261D" strokeWidth="3" opacity="0.65" />
+        <text x={TRACK_END} y="140" textAnchor="end" fontSize="20" fill="#C4261D" fontFamily="JetBrains Mono" opacity="0.8">
+          your line {shownLimit.toFixed(2)}%
+        </text>
+
+        {/* The order: its length is the cost as a share of the line you set */}
+        <rect x={tokenX + 2} y="179" width={barWidth} height="32" fill={barColor}>
+        </rect>
+
         <text
           x={captionX}
           y="275"
@@ -178,7 +133,7 @@ export default function PriceAxis({
           fill={captionFill}
           fontFamily="JetBrains Mono"
         >
-          {fillPercent.toFixed(2)}% fill
+          {shownFill.toFixed(2)}% fill
         </text>
         <text
           x={captionX}
@@ -188,7 +143,7 @@ export default function PriceAxis({
           fill={captionFill}
           fontFamily="JetBrains Mono"
         >
-          ${((amount * fillPercent) / 100).toFixed(2)} on ${amount.toFixed(0)}
+          ${((amount * shownFill) / 100).toFixed(2)} on ${amount.toFixed(0)}
         </text>
       </svg>
     </div>
