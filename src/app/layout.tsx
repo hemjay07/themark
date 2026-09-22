@@ -1,14 +1,39 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import Nav from "@/components/Nav";
+
+const SITE_URL = "https://themark.vercel.app";
 
 export const metadata: Metadata = {
-  title: "THE MARK · A",
-  description: "Fill-cost guard for tokenized stocks on Solana. Know the real price before signing.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "THE MARK",
+    template: "%s · THE MARK",
+  },
+  description:
+    "Before you buy a tokenized stock on Solana, THE MARK renders the pool you're about to trade into, shows what your exact order really costs, and signs or refuses.",
   openGraph: {
     title: "THE MARK",
-    description: "Tokenized stock cost transparency on Solana",
-    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
+    description:
+      "It shows what your order really costs before you sign. THE MARK renders the pool you're about to trade into, then signs or refuses.",
+    url: SITE_URL,
+    siteName: "THE MARK",
+    images: [{ url: "/brand/og.png", width: 1200, height: 630 }],
+    type: "website",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "THE MARK",
+    description:
+      "It shows what your order really costs before you sign. THE MARK renders the pool you're about to trade into, then signs or refuses.",
+    images: ["/brand/og.png"],
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#0A0A0F",
 };
 
 export default function RootLayout({
@@ -18,10 +43,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-      </head>
       <body style={{ backgroundColor: "var(--bg)", color: "var(--text-primary)" }}>
+        <Nav />
         {children}
       </body>
     </html>

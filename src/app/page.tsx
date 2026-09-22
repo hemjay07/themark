@@ -170,15 +170,6 @@ export default function Home() {
         borderRadius: "8px",
         padding: "32px",
       }}>
-        <div style={{
-          fontSize: "14px",
-          fontWeight: "400",
-          marginBottom: "32px",
-          color: "var(--text-muted)",
-          fontFamily: '"JetBrains Mono", monospace',
-          textTransform: "uppercase",
-          letterSpacing: "0.12em",
-        }}>The Mark · A</div>
 
         {/* The device: the pool this order routes through, with the order carved into it.
             Its trench depth is the impact the router returned for this exact amount. */}

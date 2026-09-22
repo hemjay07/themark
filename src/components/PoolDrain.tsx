@@ -55,17 +55,16 @@ export default function PoolDrain({ amountUsd, liquidityUsd, refusing }: PoolDra
       </div>
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
           marginTop: "8px",
           fontSize: "11px",
           fontFamily: '"JetBrains Mono", monospace',
           color: "var(--text-dim)",
           letterSpacing: "0.04em",
+          lineHeight: 1.6,
         }}
       >
-        <span>your order eats {(share * 100).toFixed(2)}% of this pool</span>
-        <span>${Math.round(liquidityUsd).toLocaleString()} deep</span>
+        your order eats {(share * 100).toFixed(2)}% of this pool, $
+        {Math.round(liquidityUsd).toLocaleString()} deep
       </div>
     </div>
   );
