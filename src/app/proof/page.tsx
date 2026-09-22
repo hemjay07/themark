@@ -1,71 +1,391 @@
-export default function ProofPage() {
+"use client";
+
+import { useEffect, useState, type CSSProperties } from "react";
+import { reconcileTransaction, type TxReconciliation } from "@/lib/tx";
+import { getMintExtensions, getMultiplier, getTransferFeePercentage } from "@/lib/jupiter";
+import { TOKEN_LIST } from "@/lib/tokens";
+import Odometer from "@/components/Odometer";
+
+const mono: CSSProperties = {
+  fontFamily: '"JetBrains Mono", monospace',
+  fontVariantNumeric: "tabular-nums",
+};
+
+const microLabel: CSSProperties = {
+  ...mono,
+  fontSize: "12px",
+  textTransform: "uppercase",
+  letterSpacing: "0.12em",
+  color: "var(--text-dim)",
+};
+
+const microLabelSmall: CSSProperties = {
+  ...mono,
+  fontSize: "11px",
+  textTransform: "uppercase",
+  letterSpacing: "0.1em",
+  color: "var(--text-dim)",
+  marginBottom: "6px",
+};
+
+const dimText: CSSProperties = {
+  ...mono,
+  fontSize: "13px",
+  color: "var(--text-dim)",
+  lineHeight: 1.6,
+};
+
+const inputStyle: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  padding: "12px",
+  background: "var(--bg)",
+  border: "1px solid var(--border)",
+  borderRadius: "4px",
+  color: "var(--text-primary)",
+  fontFamily: '"JetBrains Mono", monospace',
+  fontSize: "13px",
+  lineHeight: 1.5,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-all",
+  resize: "none",
+  overflow: "hidden",
+};
+
+const buttonStyle: CSSProperties = {
+  padding: "12px 20px",
+  background: "transparent",
+  border: "1px solid var(--border)",
+  color: "var(--text-primary)",
+  fontFamily: '"Archivo", sans-serif',
+  fontSize: "13px",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  borderRadius: "4px",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+interface MintFinding {
+  symbol: string;
+  mint: string;
+  multiplier: number | null;
+  transferFeePct: number;
+  loading: boolean;
+}
+
+function shortSig(sig: string): string {
+  return sig.length > 16 ? `${sig.slice(0, 8)}…${sig.slice(-8)}` : sig;
+}
+
+function Field({ label, value }: { label: string; value: string }) {
   return (
-    <div className="space-y-8">
-      <h1 className="text-3xl font-bold text-amber-400">Proof of Integration</h1>
-
-      <section className="card space-y-4">
-        <h2 className="text-xl font-semibold">Live Transactions (Mainnet)</h2>
-        <div className="space-y-3 text-sm">
-          <div className="p-3 bg-zinc-800 rounded">
-            <p className="font-semibold">Tx 1: Quote Demo</p>
-            <p className="text-zinc-400">Sep 22, 2026 | Live Jupiter API</p>
-            <a
-              href="https://solscan.io"
-              target="_blank"
-              className="text-blue-400 hover:text-blue-300 mt-2 inline-block"
-            >
-              View on Solscan →
-            </a>
-          </div>
-        </div>
-      </section>
-
-      <section className="card space-y-4">
-        <h2 className="text-xl font-semibold">API Integration</h2>
-        <ul className="space-y-2 text-sm">
-          <li className="flex items-center gap-2">
-            <span className="text-green-400">✓</span> Jupiter Price v3 (stockData.price)
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="text-green-400">✓</span> Jupiter Quote (priceImpactPct)
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="text-green-400">✓</span> Jupiter Swap (tx generation)
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="text-green-400">✓</span> Helius RPC (tx confirmation)
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="text-green-400">✓</span> Solscan Explorer (links)
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="text-green-400">✓</span> Solana RPC (mint extensions)
-          </li>
-        </ul>
-      </section>
-
-      <section className="card space-y-4">
-        <h2 className="text-xl font-semibold">Features Checklist</h2>
-        <ul className="space-y-2 text-sm">
-          <li>✓ Quote form (min $10, max $5000 USDC)</li>
-          <li>✓ All-in cost calculator (price impact + fees + multiplier)</li>
-          <li>✓ User-set worst fill % slider (0.1% — 5.0%)</li>
-          <li>✓ Refusal guard (STOP button pre-selected if cost exceeds limit)</li>
-          <li>✓ Phantom signature integration</li>
-          <li>✓ Receipt display with cost breakdown</li>
-          <li>✓ Multiplier detection & display (scaledUiAmountConfig)</li>
-          <li>✓ Transfer fee detection & itemization</li>
-          <li>✓ Tessera t-tokens support (3 hardcoded)</li>
-          <li>✓ Mobile responsive (tested on 375px)</li>
-          <li>✓ Refuse to quote if API unavailable (no cached fallback)</li>
-        </ul>
-      </section>
-
-      <section className="card">
-        <p className="text-sm text-zinc-400">
-          All transactions verified on Solana Mainnet. No testnet, no mocks, no fabricated data.
-        </p>
-      </section>
+    <div>
+      <div style={microLabelSmall}>{label}</div>
+      <div style={{ ...mono, fontSize: "15px", color: "var(--text-primary)" }}>{value}</div>
     </div>
   );
 }
+
+function AddressRow({ label, value, href }: { label: string; value: string; href?: string }) {
+  const content = (
+    <span style={{ ...mono, fontSize: "12px", color: href ? "var(--text-muted)" : "var(--text-dim)", wordBreak: "break-all" }}>
+      {value}
+    </span>
+  );
+  return (
+    <div className="proof-addr-row" style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+      <span style={microLabelSmall}>{label}</span>
+      {href ? (
+        <a href={href} target="_blank" rel="noreferrer">
+          {content}
+        </a>
+      ) : (
+        content
+      )}
+    </div>
+  );
+}
+
+function ReceiptBlock({ result }: { result: TxReconciliation }) {
+  const costColor = result.fillCostPct > 0 ? "var(--signal)" : "var(--success)";
+  return (
+    <div
+      style={{
+        border: "1px solid var(--border)",
+        borderRadius: "6px",
+        padding: "24px",
+        background: "var(--surface)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          marginBottom: "24px",
+          flexWrap: "wrap",
+          gap: "16px",
+        }}
+      >
+        <div>
+          <div style={microLabelSmall}>fill cost vs reference share</div>
+          <div style={{ ...mono, fontSize: "clamp(26px, 6vw, 36px)", color: costColor }}>
+            <Odometer value={result.fillCostPct} suffix="%" decimals={2} />
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={microLabelSmall}>in dollars</div>
+          <div style={{ ...mono, fontSize: "18px", color: costColor }}>
+            <Odometer
+              value={Math.abs(result.fillCostUsd)}
+              prefix={result.fillCostUsd >= 0 ? "$" : "-$"}
+              decimals={2}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="proof-fields"
+        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", fontSize: "14px", marginBottom: "24px" }}
+      >
+        <Field label="paid" value={`$${result.usdcSpent.toFixed(2)} USDC`} />
+        <Field label="received" value={`${result.tokenReceived.toFixed(6)} ${result.tokenSymbol}`} />
+        <Field label="effective price" value={`$${result.effectivePrice.toFixed(4)}`} />
+        <Field label="reference share price" value={`$${result.referencePrice.toFixed(4)}`} />
+        <Field label="network fee" value={`${result.feeSol.toFixed(6)} SOL`} />
+        <Field
+          label="slot"
+          value={result.blockTime ? `${result.slot} · ${new Date(result.blockTime * 1000).toISOString()}` : String(result.slot)}
+        />
+      </div>
+
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
+        <AddressRow label="signer" value={result.signer} />
+        <AddressRow label="signature" value={result.signature} />
+        <AddressRow label="solscan" value="check it on solscan →" href={`https://solscan.io/tx/${result.signature}`} />
+      </div>
+    </div>
+  );
+}
+
+function ProofPage() {
+  const [sigInput, setSigInput] = useState("");
+  const [signature, setSignature] = useState<string | null>(null);
+  const [result, setResult] = useState<TxReconciliation | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [findings, setFindings] = useState<MintFinding[]>(
+    TOKEN_LIST.map((t) => ({ symbol: t.symbol, mint: t.mint, multiplier: null, transferFeePct: 0, loading: true }))
+  );
+
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("sig");
+    if (fromUrl) {
+      setSigInput(fromUrl);
+      setSignature(fromUrl);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!signature) {
+      setResult(null);
+      setError("");
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    setResult(null);
+    reconcileTransaction(signature)
+      .then((r) => {
+        if (!cancelled) setResult(r);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "could not reconcile this transaction");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [signature]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const rows = await Promise.all(
+        TOKEN_LIST.map(async (t) => {
+          const ext = await getMintExtensions(t.mint);
+          return {
+            symbol: t.symbol,
+            mint: t.mint,
+            multiplier: getMultiplier(ext),
+            transferFeePct: getTransferFeePercentage(ext),
+            loading: false,
+          };
+        })
+      );
+      if (!cancelled) setFindings(rows);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const submitSignature = () => {
+    const trimmed = sigInput.trim();
+    if (!trimmed) return;
+    setSignature(trimmed);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    submitSignature();
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", padding: "20px", display: "flex", justifyContent: "center" }}>
+      <main style={{ width: "100%", maxWidth: "720px", padding: "32px 0 80px" }}>
+        <div style={microLabel}>THE MARK · PROOF</div>
+
+        <h1 className="proof-h1" style={{ margin: "16px 0 0", color: "var(--text-primary)" }}>
+          this receipt came off the chain, not off this page
+        </h1>
+
+        <p style={{ ...dimText, marginTop: "16px", maxWidth: "56ch" }}>
+          give it a signature. it reads that transaction off Solana mainnet and reconciles what actually
+          moved against a live reference price, line by line.
+        </p>
+
+        <form onSubmit={handleSubmit} className="proof-form" style={{ display: "flex", gap: "8px", margin: "28px 0" }}>
+          <textarea
+            value={sigInput}
+            onChange={(e) => setSigInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submitSignature();
+              }
+            }}
+            placeholder="paste a transaction signature"
+            spellCheck={false}
+            rows={2}
+            style={inputStyle}
+          />
+          <button type="submit" style={buttonStyle} disabled={loading}>
+            {loading ? "reading…" : "reconcile"}
+          </button>
+        </form>
+
+        <div
+          data-device="tx-reconciliation"
+          className={signature ? "proof-reconcile-zone" : undefined}
+          style={{ transition: "border-color 320ms cubic-bezier(0.23, 1, 0.32, 1)" }}
+        >
+          {!signature && (
+            <p style={dimText}>
+              no signature yet, so there is nothing to reconcile. paste one above, or open this page with
+              ?sig=&lt;signature&gt;.
+            </p>
+          )}
+
+          {signature && loading && <p style={dimText}>reading {shortSig(signature)} off mainnet…</p>}
+
+          {signature && !loading && error && (
+            <div
+              style={{
+                border: "1px solid var(--signal)",
+                borderRadius: "4px",
+                padding: "16px",
+                background: "rgba(196, 38, 29, 0.06)",
+              }}
+            >
+              <div style={{ ...microLabelSmall, color: "var(--signal)" }}>refused</div>
+              <p style={{ ...mono, color: "var(--text-primary)", fontSize: "13px", lineHeight: 1.5 }}>{error}</p>
+            </div>
+          )}
+
+          {result && !loading && !error && <ReceiptBlock result={result} />}
+        </div>
+
+        <section style={{ marginTop: "56px", paddingTop: "32px", borderTop: "1px solid var(--border)" }}>
+          <div style={microLabel}>read live · scaledUiAmountConfig &amp; transferFeeConfig</div>
+          <p style={{ ...dimText, marginTop: "10px", maxWidth: "58ch" }}>
+            a wallet shows multiplier-scaled units. a cost computed without this is wrong by more than
+            the price impact it is measuring.
+          </p>
+          <div style={{ marginTop: "20px", display: "grid", gap: "1px", background: "var(--border)" }}>
+            {findings.map((f) => (
+              <div key={f.mint} className="proof-finding-row" style={{ background: "var(--bg)", padding: "12px 4px" }}>
+                <span style={{ ...mono, fontSize: "13px", color: "var(--text-primary)" }}>{f.symbol}</span>
+                <span
+                  style={{
+                    ...mono,
+                    fontSize: "12px",
+                    color: f.multiplier && f.multiplier !== 1 ? "var(--signal)" : "var(--text-dim)",
+                  }}
+                >
+                  {f.loading ? "…" : f.multiplier === null ? "no scaled multiplier" : `×${f.multiplier.toFixed(8)}`}
+                </span>
+                <span
+                  style={{
+                    ...mono,
+                    fontSize: "12px",
+                    color: f.transferFeePct > 0 ? "var(--signal)" : "var(--text-dim)",
+                  }}
+                >
+                  {f.loading ? "…" : f.transferFeePct > 0 ? `${f.transferFeePct.toFixed(2)}% transfer fee` : "no transfer fee"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+
+      <style>{`
+        .proof-h1 {
+          font-family: Archivo, sans-serif;
+          font-weight: 400;
+          font-size: clamp(30px, 6vw, 52px);
+          line-height: 1.08;
+          letter-spacing: -0.01em;
+        }
+        .proof-finding-row {
+          display: grid;
+          grid-template-columns: 0.8fr 1.2fr 1.2fr;
+          gap: 12px;
+          align-items: center;
+        }
+        .proof-reconcile-zone {
+          min-height: 510px;
+        }
+        @media (max-width: 600px) {
+          .proof-reconcile-zone {
+            min-height: 870px;
+          }
+          .proof-form {
+            flex-direction: column;
+          }
+          .proof-fields {
+            grid-template-columns: 1fr !important;
+          }
+          .proof-finding-row {
+            grid-template-columns: 1fr;
+            gap: 4px;
+            padding-top: 14px !important;
+            padding-bottom: 14px !important;
+          }
+          .proof-addr-row {
+            flex-direction: column;
+            gap: 4px !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+export default ProofPage;

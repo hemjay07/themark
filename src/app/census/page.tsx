@@ -57,20 +57,26 @@ export default function CensusPage() {
     return Math.max(...pcts) * 1.08;
   }, [rows]);
 
-  const rankedTokens = useMemo(() => {
-    return TOKEN_LIST.slice().sort((a, b) => {
-      const worst = (mint: string) => {
-        const row = rows[mint];
-        if (!row) return -1;
-        let max = -1;
-        for (const size of CENSUS_SIZES) {
-          const cell = row[size.key];
-          if (cell?.status === "ok") max = Math.max(max, cell.quote.allInCostPct);
-        }
-        return max;
-      };
-      return worst(b.mint) - worst(a.mint);
-    });
+  // The rank each token would hold once its worst leg is known — printed as a number on a row
+  // that never moves, so the field can be read as ranked without the list itself reordering
+  // under the reader as quotes land (a moving row is a layout shift; a printed number is not).
+  const rankByMint = useMemo(() => {
+    const worst = (mint: string) => {
+      const row = rows[mint];
+      if (!row) return null;
+      let max: number | null = null;
+      for (const size of CENSUS_SIZES) {
+        const cell = row[size.key];
+        if (cell?.status === "ok") max = Math.max(max ?? -Infinity, cell.quote.allInCostPct);
+      }
+      return max;
+    };
+    const scored = TOKEN_LIST.map((t) => ({ mint: t.mint, score: worst(t.mint) }))
+      .filter((s): s is { mint: string; score: number } => s.score !== null)
+      .sort((a, b) => b.score - a.score);
+    const map = new Map<string, number>();
+    scored.forEach((s, i) => map.set(s.mint, i + 1));
+    return map;
   }, [rows]);
 
   const readAt = lastRead
@@ -87,8 +93,16 @@ export default function CensusPage() {
           letter-spacing:-0.01em;color:var(--text-primary);margin:0 0 16px;max-width:22ch}
         .census-sub{font-size:14px;line-height:1.6;color:var(--text-muted);max-width:56ch;margin:0 0 24px}
         .census-status{display:flex;align-items:center;gap:8px;font-family:"JetBrains Mono",monospace;
-          font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px}
-        .census-dot{width:6px;height:6px;border-radius:50%;background:var(--success);flex:0 0 6px}
+          font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);
+          margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .census-dot{width:6px;height:6px;border-radius:50%;background:var(--success);flex:0 0 6px;
+          animation:census-pulse 1400ms ease-in-out infinite}
+        .census-dot[data-done="true"]{animation:none;opacity:1}
+        .census-all{opacity:0;transition:opacity 180ms ease-out}
+        .census-all[data-visible="true"]{opacity:1}
+        @keyframes census-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+        @keyframes fb-in{from{opacity:0}to{opacity:1}}
+        .fb-in{animation:fb-in 180ms ease-out both}
         .census-legend{display:flex;gap:20px;flex-wrap:wrap;padding:16px 0 20px;margin-bottom:8px;
           border-bottom:1px solid var(--border);font-family:"JetBrains Mono",monospace;font-size:11px;
           color:var(--text-dim);letter-spacing:.06em}
@@ -106,8 +120,7 @@ export default function CensusPage() {
         .fb-label{flex:0 0 58px;font-family:"JetBrains Mono",monospace;font-size:10.5px;
           color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em}
         .fb-track{flex:1;height:8px;min-width:0;background:var(--border);border-radius:2px;overflow:hidden}
-        .fb-fill{height:100%;background:var(--signal);border-radius:2px;
-          transition:width 320ms cubic-bezier(0.23,1,0.32,1)}
+        .fb-fill{height:100%;background:var(--signal);border-radius:2px;animation:fb-in 180ms ease-out both}
         .fb-value{flex:0 0 62px;text-align:right;font-family:"JetBrains Mono",monospace;font-size:12.5px;
           color:var(--text-primary);font-variant-numeric:tabular-nums}
         .fb-dim{color:var(--text-dim)}
@@ -131,9 +144,11 @@ export default function CensusPage() {
       </p>
 
       <div className="census-status">
-        <span className="census-dot" />
-        {readAt ? `live · last read ${readAt}` : "live · reading…"}
-        {done ? " · all rows read" : ""}
+        <span className="census-dot" data-done={done} />
+        {`live · last read ${readAt ?? "--:--:--"}`}
+        <span className="census-all" data-visible={done}>
+          &nbsp;· all rows read
+        </span>
       </div>
 
       <div className="census-legend">
@@ -145,11 +160,14 @@ export default function CensusPage() {
         ))}
       </div>
 
-      <div className="census-list">
-        {rankedTokens.map((token, i) => (
+      {/* the thing that could only exist for this product: every token in the list, at three
+          order sizes, on one shared cost scale, read live. row position is fixed; only the
+          numbers and the printed rank move. */}
+      <div className="census-list" data-device="fill-cost-census">
+        {TOKEN_LIST.map((token) => (
           <CensusRow
             key={token.mint}
-            rank={i + 1}
+            rank={rankByMint.get(token.mint) ?? null}
             token={token}
             row={rows[token.mint]}
             sizes={CENSUS_SIZES}

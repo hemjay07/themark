@@ -84,7 +84,7 @@ export default function Home() {
     }
   }, [amount, selectedToken, initialized]);
 
-  const shouldRefuse = quote && quote.allInCostPct > worstFillPct;
+  const shouldRefuse = quote && quote.fillCostPct > worstFillPct;
   const amountNum = parseFloat(amount) || 500;
   const fillPercent = ((amountNum - 10) / (25000 - 10)) * 100;
 
@@ -124,7 +124,7 @@ export default function Home() {
           (quote.amountInUsd / quote.amountOutTokens - quote.referencePrice) * quote.amountOutTokens,
         costAboveReferencePct:
           ((quote.amountInUsd / quote.amountOutTokens - quote.referencePrice) / quote.referencePrice) * 100,
-        savedVsWorstCase: ((worstFillPct - quote.allInCostPct) * quote.amountInUsd) / 100,
+        savedVsWorstCase: ((worstFillPct - quote.fillCostPct) * quote.amountInUsd) / 100,
         solscanLink: `https://solscan.io/tx/${signature}`,
         timestamp: new Date().toISOString(),
         tokenSymbol: token?.symbol || "Token",
@@ -185,24 +185,21 @@ export default function Home() {
         <div style={{ margin: "28px 0 20px" }}>
           <PoolWell
             orderShare={quote && quote.liquidityUsd > 0 ? amountNum / quote.liquidityUsd : 0}
-            fillPct={quote?.allInCostPct ?? 0}
+            fillPct={quote?.fillCostPct ?? 0}
             limitPct={worstFillPct}
           />
           <div style={{
-            display: "flex",
-            justifyContent: "space-between",
             marginTop: "8px",
             fontSize: "11px",
             fontFamily: '"JetBrains Mono", monospace',
             color: "var(--text-dim)",
             letterSpacing: "0.04em",
+            lineHeight: 1.6,
+            minHeight: "36px",
           }}>
-            <span>the pool this order routes through</span>
-            <span>
-              {quote
-                ? `depth modelled from $${Math.round(quote.liquidityUsd).toLocaleString()} live; trench is the router's own impact`
-                : "waiting on a live quote"}
-            </span>
+            {quote
+              ? `the pool this order routes through, $${Math.round(quote.liquidityUsd).toLocaleString()} deep, read live. the trench is the router's own impact for this amount.`
+              : "the pool this order routes through, waiting on a live quote"}
           </div>
         </div>
 
@@ -213,7 +210,7 @@ export default function Home() {
             <PriceAxis
               tokenPrice={quote.onChainPrice}
               sharePrice={quote.referencePrice}
-              fillPercent={quote.allInCostPct}
+              fillPercent={quote.fillCostPct}
               amount={amountNum}
               worstFillPct={worstFillPct}
             />
@@ -416,7 +413,7 @@ export default function Home() {
               color: "var(--text-primary)",
               lineHeight: 1.5,
             }}>
-              This fill costs <Odometer value={quote.allInCostPct} suffix="%" style={{ color: "var(--signal)" }} />.
+              This fill costs <Odometer value={quote.fillCostPct} suffix="%" style={{ color: "var(--signal)" }} />.
               You said you would take {worstFillPct.toFixed(1)}%.
             </div>
             <div style={{

@@ -13,18 +13,21 @@ export type CellState =
 export type RowState = Partial<Record<string, CellState>>;
 
 interface CensusRowProps {
-  rank: number;
+  rank: number | null;
   token: Token;
   row: RowState | undefined;
   sizes: SizeSpec[];
   scaleMax: number;
 }
 
+// Row position never moves: the token order on screen is fixed, so a live re-ranking of the
+// field never reflows the page. Rank is read as a number printed in place, computed from the
+// quotes as they land, on the row that always was there.
 export default function CensusRow({ rank, token, row, sizes, scaleMax }: CensusRowProps) {
   return (
-    <div className="cr" data-rank={rank}>
+    <div className="cr">
       <div className="cr-head">
-        <span className="cr-rank">{String(rank).padStart(2, "0")}</span>
+        <span className="cr-rank">{rank ? String(rank).padStart(2, "0") : "—"}</span>
         <span className="cr-symbol">{token.symbol}</span>
         <span className="cr-name">{token.name}</span>
       </div>

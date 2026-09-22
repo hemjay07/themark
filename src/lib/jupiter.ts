@@ -45,18 +45,31 @@ export function getTransferFeePercentage(extensions: ParsedExtension[]): number 
   return typeof bps === "number" ? bps / 100 : 0;
 }
 
+// Jupiter's public endpoint rate-limits. A 429 is not an answer, so the call is retried with
+// backoff rather than being treated as "no data"; a number is still only ever shown when a call
+// in this moment returned it.
+async function fetchWithRetry(url: string, tries = 3): Promise<Response | null> {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+      if (res.ok) return res;
+      if (res.status !== 429 && res.status < 500) return null;
+    } catch {
+      // network error: fall through to the backoff
+    }
+    await new Promise((r) => setTimeout(r, 350 * Math.pow(2, i)));
+  }
+  return null;
+}
+
 export async function fetchPrices(mints: string[]): Promise<Record<string, Price>> {
   const params = new URLSearchParams();
   mints.forEach((m) => params.append("ids", m));
 
   try {
-    const res = await fetch(`${JUPITER_BASE_URL}/price/v3?${params}`, {
-      method: "GET",
-      headers: { "Accept": "application/json" },
-    });
-
-    if (!res.ok) {
-      console.warn(`Jupiter price error: ${res.status}`);
+    const res = await fetchWithRetry(`${JUPITER_BASE_URL}/price/v3?${params}`);
+    if (!res) {
+      console.warn("Jupiter price unavailable after retries");
       return {};
     }
 
@@ -84,13 +97,9 @@ export async function getQuote(
   });
 
   try {
-    const res = await fetch(`${JUPITER_QUOTE_URL}/quote?${params}`, {
-      method: "GET",
-      headers: { "Accept": "application/json" },
-    });
-
-    if (!res.ok) {
-      console.error(`Quote failed: ${res.status}`);
+    const res = await fetchWithRetry(`${JUPITER_QUOTE_URL}/quote?${params}`);
+    if (!res) {
+      console.error("Quote unavailable after retries");
       return null;
     }
 
@@ -150,6 +159,13 @@ export async function getQuote(
 
     const allInCostPct = (allInCostUsd / amountInUsd) * 100;
 
+    // Jupiter returns priceImpactPct as a FRACTION. Verified 2026-09-22 against PLTRx: a $500
+    // order quotes 0.00465 and a $25,000 order 0.01689, a delta of 1.22 points, and the effective
+    // price moves $184.45 -> $186.75, which is 1.25%. So the field is a fraction, not a percent.
+    const impactPct = Math.abs(Number(quoteData.priceImpactPct) || 0) * 100;
+    const fillCostPct = impactPct + transferFeePercentage;
+    const fillCostUsd = (amountInUsd * fillCostPct) / 100;
+
     return {
       inputMint,
       outputMint,
@@ -162,6 +178,8 @@ export async function getQuote(
       amountOutTokens,
       allInCostUsd,
       allInCostPct,
+      fillCostPct,
+      fillCostUsd,
       multiplier,
       multiplierKnown,
       liquidityUsd: price.liquidity,

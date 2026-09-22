@@ -40,6 +40,10 @@ export interface QuoteResult {
   amountOutTokens: number;
   allInCostUsd: number;
   allInCostPct: number;
+  // what the route itself charges: price impact plus any transfer fee. Never negative.
+  // Kept separate from allInCostPct, which nets off the basis and so can be either sign.
+  fillCostPct: number;
+  fillCostUsd: number;
   multiplier: number;
   multiplierKnown: boolean;
   liquidityUsd: number;
