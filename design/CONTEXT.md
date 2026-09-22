@@ -1,5 +1,5 @@
 # CONTEXT for Before you buy a tokenized stock, THE MARK shows what your exact order really costs, lets you set the worst fill you will take, then signs or refuses.
-Assembled 2026-09-22T14:02Z by context.mjs. Read this before writing any route. Cite it: every colour,
+Assembled 2026-09-22T14:42Z by context.mjs. Read this before writing any route. Cite it: every colour,
 face, radius, duration and technique in the build comes from a line here or from design/TOKENS.css, never from memory.
 
 ## The one moment (charter.wonder)
@@ -7,7 +7,42 @@ You drag the amount from 500 to 25,000 dollars and the cost meter counts from 0.
 Hero technique: number-odometer · device: the fill-cost meter: the percentage this exact order pays over the price of the real share, quoted live from the route it would take (data)
 
 ## Tokens (design/TOKENS.css)
-(missing)
+```css
+/* design/TOKENS.css -- extracted by spec.mjs from design/proto/A.html on 2026-09-22.
+   Exact values. The shipped :root is diffed against this file (drift.mjs). Edit here first, then the code. */
+:root {
+  --bg: #0A0A0F;
+  --surface: #12121A;
+  --signal: #C4261D;
+  --success: #0B7A3B;
+  --text-primary: #FAFAFA;
+  --text-muted: #A1A1AA;
+  --text-dim: #71717A;
+  --border: #27272A;
+
+  /* derived from computed styles; names the prototype already declares above are not repeated. The build declares all of these. */
+  --ground: rgb(10, 10, 15);
+  --ink: rgb(250, 250, 250);   /* most common text colour */
+  --ink-2: rgb(113, 113, 122);
+  --ink-3: rgb(161, 161, 170);
+  --signal-the-cost: #C4261D;   /* declared in CHARTER; not painted on this prototype */
+  --signal-the-fill: #0B7A3B;   /* declared in CHARTER; not painted on this prototype */
+  --hairline: rgb(39, 39, 42);
+  --radius: 8px;   /* others seen: 8px, 2px */
+  --font-display: Archivo;   /* the largest text, 32px/400 */
+  --font-body: Archivo;   /* most common */
+  --weight-body: 400;
+  --display-1280: 32px;
+  --display-390: 22px;
+  --ease-1: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-2: ease-out;
+  --d-tick: 90ms;
+  --d-element: 180ms;
+  --d-data: 320ms;
+  --d-count: 1400ms;
+  --cap: 1600ms;
+}
+```
 
 ## Faces
 display: Archivo · text: Archivo · mono: JetBrains Mono
@@ -405,4 +440,4 @@ Read these before drafting any copy for a surface.
 - one hero technique, from the parts bin, named in the charter
 
 ## Missing before building
-- design/TOKENS.css (run spec.mjs on the surviving prototype, or write it from the charter's faces and signal colours)
+- nothing

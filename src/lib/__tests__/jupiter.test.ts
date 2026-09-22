@@ -1,59 +1,56 @@
-import { getMultiplier, getTransferFeePercentage } from "../jupiter";
+import { getTransferFeePercentage, type ParsedExtension } from "../jupiter";
+
+// Fixtures below are copied from the live responses on 2026-09-22:
+//   getAccountInfo(jsonParsed) for oPAiAikWTaFj9RYoRFD35ccfwhnMcB3ThgBZRHSkjTZ (tOpenAI)
+//   lite-api.jup.ag/price/v3 for XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W (SPYx)
+// The previous fixtures described an object-shaped `extensions` that the RPC does not return,
+// so the fee was reported as 0 for every mint while the tests passed.
 
 describe("Jupiter API Client", () => {
-  describe("getMultiplier", () => {
-    it("should extract multiplier from scaledUiAmountConfig", () => {
-      const extensions: any = {
-        scaledUiAmountConfig: {
-          interestRateConfig: {
-            currentInterestRate: "1003269010000000000", // 1.00326901 in 18 decimals
-          },
+  describe("getTransferFeePercentage", () => {
+    const tOpenAiExtensions: ParsedExtension[] = [
+      {
+        extension: "transferFeeConfig",
+        state: {
+          newerTransferFee: { epoch: 987, maximumFee: 18446744073709552000, transferFeeBasisPoints: 20 },
+          olderTransferFee: { epoch: 987, maximumFee: 18446744073709552000, transferFeeBasisPoints: 20 },
+          withheldAmount: 1071444,
         },
-      };
+      },
+      { extension: "metadataPointer", state: { authority: "EXvTtxurWBUNNCtLojaN8ZBJFNJPZFSH3szoih9hh7YW" } },
+    ];
 
-      const multiplier = getMultiplier(extensions);
-      expect(multiplier).toBeCloseTo(1.00326901, 5);
+    it("reads 20 bps from the live tOpenAI extension array", () => {
+      expect(getTransferFeePercentage(tOpenAiExtensions)).toBe(0.2);
     });
 
-    it("should return 1 when no scaledUiAmountConfig", () => {
-      const extensions: any = {};
-      const multiplier = getMultiplier(extensions);
-      expect(multiplier).toBe(1);
+    it("returns 0 when the mint carries no transferFeeConfig", () => {
+      expect(getTransferFeePercentage([{ extension: "metadataPointer", state: {} }])).toBe(0);
     });
 
-    it("should return 1 when no interestRateConfig", () => {
-      const extensions: any = {
-        scaledUiAmountConfig: {},
-      };
-      const multiplier = getMultiplier(extensions);
-      expect(multiplier).toBe(1);
+    it("returns 0 for an empty extension array", () => {
+      expect(getTransferFeePercentage([])).toBe(0);
     });
   });
 
-  describe("getTransferFeePercentage", () => {
-    it("should extract transfer fee from transferFeeConfig", () => {
-      const extensions: any = {
-        transferFeeConfig: {
-          transferFeeBasisPoints: 20, // 20 bps = 0.20%
-        },
-      };
+  describe("scaled UI multiplier", () => {
+    // The multiplier is served by price/v3, not by the mint account.
+    const spyxPrice = {
+      usdPrice: 773.7723983316074,
+      decimals: 8,
+      liquidity: 8201610,
+      scaledUiConfig: { multiplier: 1.003909240011759 },
+    };
 
-      const fee = getTransferFeePercentage(extensions);
-      expect(fee).toBe(0.2);
+    it("carries the multiplier on the price response", () => {
+      expect(spyxPrice.scaledUiConfig.multiplier).toBeCloseTo(1.003909, 6);
     });
 
-    it("should return 0 when no transferFeeConfig", () => {
-      const extensions: any = {};
-      const fee = getTransferFeePercentage(extensions);
-      expect(fee).toBe(0);
-    });
-
-    it("should return 0 when transferFeeBasisPoints is not present", () => {
-      const extensions: any = {
-        transferFeeConfig: {},
-      };
-      const fee = getTransferFeePercentage(extensions);
-      expect(fee).toBe(0);
+    it("moves the wallet unit count by the multiplier", () => {
+      const rawUnits = 0.6462 * 1e8;
+      const uiUnits = (rawUnits / 1e8) * spyxPrice.scaledUiConfig.multiplier;
+      expect(uiUnits).toBeGreaterThan(0.6462);
+      expect(uiUnits).toBeCloseTo(0.648725, 5);
     });
   });
 

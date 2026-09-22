@@ -50,3 +50,14 @@ tick at 12% and share tick at 78%, each a 2 px full-height rule with its price i
 role beneath ("you pay", "the share"); the order a 10 px accent bar with "0.75% fill" as 12 px dim text on the
 bar; delete the Token price, Share price and Your order pays rows so each number appears once; headline down to
 20 px above the axis; same at 390 with labels stacked under their ticks.
+
+## Judge round 5 (2026-09-22 14:50Z, on proto-A-v10, axis lifted to the top of the card)
+Genre: priced slippage instrument.
+What could only exist for this product: "two live prices as the two ends of one measured track, with a fill bar
+whose length is the slice of that gap you actually eat."
+The eye lands on the axis assembly, not a headline. At 390 the axis is the largest thing and the two prices read
+as separate.
+Judge verdict: KEEP
+For the rebuild: anchor the fill bar to one tick so its length IS the gap being measured (it currently floats in
+the middle of the track), and shrink the 390 caption below the price size. Everything below the axis is still
+ordinary form furniture; the card earns KEEP on its top third alone.

@@ -20,8 +20,8 @@ export function QuoteForm({ onQuote, isLoading }: QuoteFormProps) {
     setError("");
 
     const amountNum = parseFloat(amount);
-    if (!amountNum || amountNum < 10 || amountNum > 5000) {
-      setError("Amount must be between $10 and $5000");
+    if (!amountNum || amountNum < 10 || amountNum > 25000) {
+      setError("Amount must be between $10 and $25,000");
       return;
     }
 
@@ -77,12 +77,12 @@ export function QuoteForm({ onQuote, isLoading }: QuoteFormProps) {
           onChange={(e) => setAmount(e.target.value)}
           placeholder="e.g., 500"
           min="10"
-          max="5000"
+          max="25000"
           step="1"
           className="input-field w-full"
           disabled={loadingQuote || isLoading}
         />
-        <p className="text-xs text-zinc-500 mt-1">Min $10, Max $5000</p>
+        <p className="text-xs text-zinc-500 mt-1">Min $10, max $25,000. Quoting is free; only signing spends.</p>
       </div>
 
       {error && <p className="error-text">{error}</p>}

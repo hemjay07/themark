@@ -2,76 +2,47 @@ import type { Price, QuoteResult } from "./types";
 import { USDC_MINT, getToken } from "./tokens";
 
 const JUPITER_BASE_URL = "https://lite-api.jup.ag";
-const JUPITER_QUOTE_URL = "https://quote-api.jup.ag/v6";
+const JUPITER_QUOTE_URL = "https://lite-api.jup.ag/swap/v1"; // quote-api.jup.ag does not resolve; verified 2026-09-22
 
-interface MintExtensions {
-  scaledUiAmountConfig?: {
-    interestRateConfig?: {
-      currentInterestRate?: string;
-      interestRateUpdateTimestamp?: number;
-    };
-    decimals?: number;
-    multiplier?: string;
-  };
-  transferFeeConfig?: {
-    transferFeeConfigAuthority?: string;
-    withheldAmount?: string;
-    transferFeeBasisPoints?: number;
-    maximumFee?: string;
-  };
+// getAccountInfo(jsonParsed) returns extensions as an array of { extension, state }.
+// Verified against the live RPC for oPAiAikW... (tOpenAI) on 2026-09-22.
+export interface ParsedExtension {
+  extension: string;
+  state: Record<string, any>;
 }
 
-// Fetch mint account info to read extensions (scaledUiAmountConfig, transferFeeConfig)
-export async function getMintExtensions(
-  mint: string,
-  rpcUrl: string = "https://api.mainnet-beta.solana.com"
-): Promise<MintExtensions> {
+// Reads the mint's Token-2022 extensions through this app's own route, because the public
+// RPC refuses browser-origin requests with 403.
+export async function getMintExtensions(mint: string): Promise<ParsedExtension[]> {
   try {
-    const res = await fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "getAccountInfo",
-        params: [mint, { encoding: "jsonParsed" }],
-      }),
+    const res = await fetch(`/api/mint?mint=${encodeURIComponent(mint)}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
     });
-
+    if (!res.ok) return [];
     const data = await res.json();
-    if (data.result?.data?.parsed?.extensions) {
-      return data.result.data.parsed.extensions;
-    }
-    return {};
+    return Array.isArray(data.extensions) ? data.extensions : [];
   } catch (err) {
     console.error("Failed to fetch mint extensions:", err);
-    return {};
+    return [];
   }
 }
 
-// Extract multiplier from scaledUiAmountConfig
-export function getMultiplier(extensions: MintExtensions): number {
-  const config = extensions.scaledUiAmountConfig;
-  if (config?.interestRateConfig) {
-    const multiplierStr = config.interestRateConfig.currentInterestRate;
-    if (multiplierStr) {
-      try {
-        return parseFloat(multiplierStr) / Math.pow(10, 18);
-      } catch {
-        return 1;
-      }
-    }
-  }
-  return 1;
+// The scaled UI multiplier from the mint account, which is the authority for it.
+// Returns null when the mint carries no scaledUiAmountConfig at all.
+export function getMultiplier(extensions: ParsedExtension[]): number | null {
+  const cfg = extensions.find((e) => e.extension === "scaledUiAmountConfig");
+  const raw = cfg?.state?.multiplier;
+  if (raw === undefined || raw === null) return null;
+  const value = typeof raw === "number" ? raw : parseFloat(String(raw));
+  return Number.isFinite(value) ? value : null;
 }
 
-// Extract transfer fee percentage
-export function getTransferFeePercentage(extensions: MintExtensions): number {
-  const config = extensions.transferFeeConfig;
-  if (config?.transferFeeBasisPoints) {
-    return config.transferFeeBasisPoints / 100; // Convert basis points to percentage
-  }
-  return 0;
+// Transfer fee in percent, from the newer fee schedule. Returns 0 when the mint has no fee.
+export function getTransferFeePercentage(extensions: ParsedExtension[]): number {
+  const cfg = extensions.find((e) => e.extension === "transferFeeConfig");
+  const bps = cfg?.state?.newerTransferFee?.transferFeeBasisPoints;
+  return typeof bps === "number" ? bps / 100 : 0;
 }
 
 export async function fetchPrices(mints: string[]): Promise<Record<string, Price>> {
@@ -134,14 +105,30 @@ export async function getQuote(
       return null;
     }
 
-    // Fetch mint extensions for multiplier and transfer fees
+    // The multiplier comes from the price response itself; the transfer fee needs the mint account.
     const extensions = await getMintExtensions(outputMint);
-    const multiplier = getMultiplier(extensions);
     const transferFeePercentage = getTransferFeePercentage(extensions);
+    const onChainMultiplier = getMultiplier(extensions);
+    const feedMultiplier = price.scaledUiConfig?.multiplier;
+    const resolvedMultiplier =
+      onChainMultiplier ?? (typeof feedMultiplier === "number" ? feedMultiplier : null);
+    const multiplierKnown = resolvedMultiplier !== null;
+    const multiplier = resolvedMultiplier ?? 1;
 
-    const referencePrice = price.stockData?.price || price.price;
-    const token = getToken(outputMint);
-    const decimals = token?.decimals || price.decimals || 6;
+    // usdPrice is the on-chain token price; stockData.price is the real share it references.
+    const referencePrice = price.stockData?.price ?? price.usdPrice;
+    const onChainPrice = price.usdPrice;
+    if (!Number.isFinite(referencePrice) || !Number.isFinite(onChainPrice)) {
+      // charter ban 1: a number that was not returned by this call does not go on the surface.
+      console.error("Price read returned no usable number; refusing to quote.");
+      return null;
+    }
+    // Decimals come from the live mint data first; the local list is only a fallback.
+    const decimals = price.decimals ?? getToken(outputMint)?.decimals;
+    if (typeof decimals !== "number") {
+      console.error("No decimals for mint; refusing to quote.");
+      return null;
+    }
 
     // Raw token amount from quote
     const amountOutRaw = parseInt(quoteData.outAmount);
@@ -170,12 +157,14 @@ export async function getQuote(
       outAmount: quoteData.outAmount,
       priceImpactPct: quoteData.priceImpactPct || 0,
       referencePrice,
-      onChainPrice: price.price,
+      onChainPrice,
       amountInUsd,
       amountOutTokens,
       allInCostUsd,
       allInCostPct,
       multiplier,
+      multiplierKnown,
+      liquidityUsd: price.liquidity,
       transferFeePercentage: transferFeePercentage > 0 ? transferFeePercentage : undefined,
     };
   } catch (err) {

@@ -3,22 +3,29 @@ export interface Token {
   symbol: string;
   name: string;
   decimals: number;
-  liquidity: number;
   logoURI?: string;
 }
 
 export interface Price {
-  id: string;
-  type: string;
-  price: number;
+  // lite-api.jup.ag/price/v3 returns usdPrice, not price. Verified against the live endpoint 2026-09-22.
+  usdPrice: number;
   decimals: number;
-  symbol: string;
-  stockData?: {
-    price: number;
-    symbol: string;
-    name: string;
-  };
   liquidity: number;
+  scaledUiConfig?: {
+    multiplier: number;
+    newMultiplier?: number;
+    newMultiplierEffectiveAt?: string;
+    usdPricePrescaled?: number;
+  };
+  blockId?: number;
+  priceChange24h?: number;
+  createdAt?: string;
+  stockData?: {
+    id: string;
+    price: number;
+    mcap?: number;
+    updatedAt?: string;
+  };
 }
 
 export interface QuoteResult {
@@ -34,6 +41,8 @@ export interface QuoteResult {
   allInCostUsd: number;
   allInCostPct: number;
   multiplier: number;
+  multiplierKnown: boolean;
+  liquidityUsd: number;
   transferFeePercentage?: number;
   swapTransaction?: string; // base64
 }
