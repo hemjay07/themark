@@ -31,3 +31,28 @@ is measuring.
 4. The same mints carry `permanentDelegate`, `pausableConfig` and `defaultAccountState`: the issuer can freeze,
    seize and pause. One line on the receipt, from the chain, because the third repeated complaint in the census
    is "you do not own the share" and no one else shows it.
+
+## Correction, 2026-09-22 ~20:30Z: the build ignored this document for most of a day
+
+An adversarial review found the app reading `state.multiplier` and never looking at
+`newMultiplier` / `newMultiplierEffectiveTimestamp`, which this document names in its own table.
+Both effective dates above have passed, so the live values are the right-hand column. Re-read from
+the mint accounts just now:
+
+| mint | effective multiplier | the stale field the code was reading | effective date passed |
+|---|---|---|---|
+| SPYx | 1.005714560286254 | 1.003909240011759 | yes, 2026-06-18 |
+| AAPLx | 1.0032690125398187 | 1.0026642075893797 | yes, 2026-08-08 |
+| TSLAx | 1 | 1 | yes |
+
+Jupiter's own price response confirms which is live: `usdPricePrescaled / usdPrice` equals
+1.005714560286254 for SPYx exactly.
+
+The cost of the bug: reading the stale field understated the units received and so manufactured
+about 0.18% of cost on a $500 SPYx order out of nothing. That is larger than the 0.20% median gap
+this project exists to argue against, so the product was making the same class of error it accuses
+the field of.
+
+Fixed in `getMultiplier`, which now takes the new multiplier once its timestamp has passed, with
+four unit tests built from the live mint state. The process lesson is the one worth keeping: the
+research was right and specific, and the build did not follow it. Nothing checked that it had.
