@@ -24,7 +24,7 @@ export default function PoolHero({ orderShare, fillPct, limitPct, children }: Po
             position: "absolute",
             inset: 0,
             background:
-              "linear-gradient(180deg, rgba(10,10,15,0.88) 0%, rgba(10,10,15,0.62) 42%, rgba(10,10,15,0.90) 100%)",
+              "linear-gradient(180deg, rgba(10,10,15,0.72) 0%, rgba(10,10,15,0.34) 38%, rgba(10,10,15,0.86) 100%)",
           }}
         />
       </div>

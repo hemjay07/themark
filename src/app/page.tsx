@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getQuote, getSwapTransaction } from "@/lib/jupiter";
+import { getQuote, getSwapTransaction, fetchPrices, rateLimitedRecently } from "@/lib/jupiter";
 import { reconcileTransaction } from "@/lib/tx";
 import { TOKEN_LIST, getTokenBySymbol, USDC_MINT, getToken } from "@/lib/tokens";
 import type { QuoteResult, Receipt as ReceiptType } from "@/lib/types";
@@ -91,7 +91,9 @@ export default function Home() {
         console.error("Quote failed:", err);
         setQuote(null);
         setError(
-          "No live quote right now, so there is nothing to show. This screen never fills the gap with a remembered price."
+          rateLimitedRecently()
+            ? "Jupiter is rate-limiting this address right now, so there is no live price to show. It clears in under a minute."
+            : "No live quote right now, so there is nothing to show. This screen never fills the gap with a remembered price."
         );
       } finally {
         setLoading(false);
@@ -192,8 +194,10 @@ export default function Home() {
   };
 
   // Every stock priced at the amount you typed, so the selector itself shows the spread.
-  // This is the whole claim in one row: the same order costs wildly different amounts
-  // depending only on which pool it lands in.
+  // This is deliberately slow and polite: the free Jupiter endpoint throttles hard, and a burst
+  // of eight quotes was starving the one quote this page actually needs. One price call covers
+  // every token, then the mints are read one at a time with a gap, and the selected token is
+  // skipped because the main quote already has it.
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -203,26 +207,22 @@ export default function Home() {
       const limit = Number.isFinite(worstFillPct) ? worstFillPct : 0;
       const bps = Math.max(1, Math.min(5000, Math.round(limit * 100)));
 
-      const tasks = [...TOKEN_LIST];
-      let next = 0;
-      const worker = async () => {
-        while (!cancelled) {
-          const i = next++;
-          if (i >= tasks.length) return;
-          const t = tasks[i];
-          try {
-            const q = await getQuote(USDC_MINT, t.mint, lamports, bps);
-            if (!cancelled) {
-              setCostByToken((prev) => ({ ...prev, [t.symbol]: q ? q.fillCostPct : null }));
-            }
-          } catch {
-            if (!cancelled) setCostByToken((prev) => ({ ...prev, [t.symbol]: null }));
-          }
+      const prices = await fetchPrices(TOKEN_LIST.map((t) => t.mint));
+      if (cancelled) return;
+
+      for (const t of TOKEN_LIST) {
+        if (cancelled) return;
+        try {
+          const q = await getQuote(USDC_MINT, t.mint, lamports, bps, { price: prices[t.mint] });
+          if (!cancelled) setCostByToken((prev) => ({ ...prev, [t.symbol]: q ? q.fillCostPct : null }));
+        } catch {
+          if (!cancelled) setCostByToken((prev) => ({ ...prev, [t.symbol]: null }));
         }
-      };
-      await Promise.all(Array.from({ length: 4 }, worker));
+        await new Promise((r) => setTimeout(r, 320));
+      }
     };
-    const timer = setTimeout(run, 700);
+    // long enough after mount that the page's own quote goes first
+    const timer = setTimeout(run, 2200);
     return () => {
       cancelled = true;
       clearTimeout(timer);
@@ -254,6 +254,18 @@ export default function Home() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "20px" }}>
+      {/* dangerouslySetInnerHTML, not a text child: <style> is a raw-text element, so React's
+          SSR serializer escapes ">" in a selector while the browser never decodes it, which is a
+          real hydration mismatch (React #425). */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .fold-grid{width:100%;max-width:1220px;margin:0 auto;display:grid;gap:28px;
+          grid-template-columns:1fr;align-items:start}
+        @media (min-width:1040px){
+          .fold-grid{grid-template-columns:minmax(0,1fr) minmax(0,620px);gap:44px;
+            padding:0 24px;align-items:start}
+          .fold-grid > header{position:sticky;top:84px}
+        }
+      ` }} />
       {/* The fold says what this is before it shows the instrument. A stranger arriving here
           should know the product and the claim in three seconds, without reading a number. */}
       <PoolHero
@@ -261,7 +273,8 @@ export default function Home() {
         fillPct={quote?.fillCostPct ?? 0}
         limitPct={effectiveLimit}
       >
-      <header style={{ width: "100%", maxWidth: "720px", margin: "0 auto", padding: "64px 20px 56px" }}>
+      <div className="fold-grid">
+      <header style={{ width: "100%", padding: "56px 4px 24px" }}>
         <h1 style={{
           fontFamily: '"Archivo", sans-serif',
           fontSize: "clamp(28px, 5.2vw, 46px)",
@@ -318,10 +331,83 @@ export default function Home() {
           is only needed for the last step, actually placing the order.
         </p>
       </header>
+      {/* The rest of the product, said plainly, so a reader knows there are two more surfaces. */}
+      <section style={{ width: "100%", padding: "8px 4px 0" }}>
+        <div style={{
+          fontFamily: '"JetBrains Mono", monospace',
+          fontSize: "11px",
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color: "var(--text-dim)",
+          marginBottom: "16px",
+        }}>
+          Two more surfaces
+        </div>
+        <div style={{ display: "grid", gap: "12px", gridTemplateColumns: "1fr" }}>
+          <a
+            href="/census"
+            style={{
+              display: "block",
+              padding: "18px",
+              border: "1px solid var(--border)",
+              borderRadius: "6px",
+              textDecoration: "none",
+              background: "var(--surface)",
+            }}
+          >
+            <div style={{
+              fontFamily: '"Archivo", sans-serif',
+              fontSize: "17px",
+              color: "var(--text-primary)",
+              marginBottom: "8px",
+            }}>
+              The census
+            </div>
+            <div style={{
+              fontFamily: '"Archivo", sans-serif',
+              fontSize: "14px",
+              lineHeight: 1.5,
+              color: "var(--text-muted)",
+            }}>
+              The same check run on every stock at once, for three different amounts. Some cost you
+              almost nothing. One costs you forty times more. Worth a look before you pick.
+            </div>
+          </a>
+          <a
+            href="/proof"
+            style={{
+              display: "block",
+              padding: "18px",
+              border: "1px solid var(--border)",
+              borderRadius: "6px",
+              textDecoration: "none",
+              background: "var(--surface)",
+            }}
+          >
+            <div style={{
+              fontFamily: '"Archivo", sans-serif',
+              fontSize: "17px",
+              color: "var(--text-primary)",
+              marginBottom: "8px",
+            }}>
+              The proof
+            </div>
+            <div style={{
+              fontFamily: '"Archivo", sans-serif',
+              fontSize: "14px",
+              lineHeight: 1.5,
+              color: "var(--text-muted)",
+            }}>
+              Paste the receipt code from any past trade and it checks, against the public record,
+              whether what was promised beforehand is what actually happened.
+            </div>
+          </a>
+        </div>
+      </section>
 
       <main style={{
         width: "100%",
-        maxWidth: "580px",
+        maxWidth: "620px",
         background: "var(--surface)",
         border: "1px solid var(--border)",
         borderRadius: "8px",
@@ -374,7 +460,7 @@ export default function Home() {
                           ? "var(--signal)"
                           : "var(--text-dim)",
                   }}>
-                    {cost === undefined ? "…" : cost === null ? "no read" : `${cost.toFixed(2)}%`}
+                    {cost === undefined ? "…" : cost === null ? "—" : `${cost.toFixed(2)}%`}
                   </span>
                 </button>
               );
@@ -794,81 +880,9 @@ export default function Home() {
         )}
       </main>
 
+      </div>
       </PoolHero>
 
-      {/* The rest of the product, said plainly, so a reader knows there are two more surfaces. */}
-      <section style={{ width: "100%", maxWidth: "720px", padding: "44px 4px 64px" }}>
-        <div style={{
-          fontFamily: '"JetBrains Mono", monospace',
-          fontSize: "11px",
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-          color: "var(--text-dim)",
-          marginBottom: "16px",
-        }}>
-          Two more surfaces
-        </div>
-        <div style={{ display: "grid", gap: "12px", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
-          <a
-            href="/census"
-            style={{
-              display: "block",
-              padding: "18px",
-              border: "1px solid var(--border)",
-              borderRadius: "6px",
-              textDecoration: "none",
-              background: "var(--surface)",
-            }}
-          >
-            <div style={{
-              fontFamily: '"Archivo", sans-serif',
-              fontSize: "17px",
-              color: "var(--text-primary)",
-              marginBottom: "8px",
-            }}>
-              The census
-            </div>
-            <div style={{
-              fontFamily: '"Archivo", sans-serif',
-              fontSize: "14px",
-              lineHeight: 1.5,
-              color: "var(--text-muted)",
-            }}>
-              The same check run on every stock at once, for three different amounts. Some cost you
-              almost nothing. One costs you forty times more. Worth a look before you pick.
-            </div>
-          </a>
-          <a
-            href="/proof"
-            style={{
-              display: "block",
-              padding: "18px",
-              border: "1px solid var(--border)",
-              borderRadius: "6px",
-              textDecoration: "none",
-              background: "var(--surface)",
-            }}
-          >
-            <div style={{
-              fontFamily: '"Archivo", sans-serif',
-              fontSize: "17px",
-              color: "var(--text-primary)",
-              marginBottom: "8px",
-            }}>
-              The proof
-            </div>
-            <div style={{
-              fontFamily: '"Archivo", sans-serif',
-              fontSize: "14px",
-              lineHeight: 1.5,
-              color: "var(--text-muted)",
-            }}>
-              Paste the receipt code from any past trade and it checks, against the public record,
-              whether what was promised beforehand is what actually happened.
-            </div>
-          </a>
-        </div>
-      </section>
     </div>
   );
 }
