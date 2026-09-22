@@ -18,7 +18,6 @@ export const metadata: Metadata = {
       "It shows what your order really costs before you sign. THE MARK renders the pool you're about to trade into, then signs or refuses.",
     url: SITE_URL,
     siteName: "THE MARK",
-    images: [{ url: "/brand/og.png", width: 1200, height: 630 }],
     type: "website",
   },
   twitter: {
@@ -26,7 +25,6 @@ export const metadata: Metadata = {
     title: "THE MARK",
     description:
       "It shows what your order really costs before you sign. THE MARK renders the pool you're about to trade into, then signs or refuses.",
-    images: ["/brand/og.png"],
   },
 };
 
