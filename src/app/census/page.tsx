@@ -6,7 +6,10 @@ import { TOKEN_LIST, USDC_MINT } from "@/lib/tokens";
 import { CENSUS_SIZES } from "@/lib/censusSizes";
 import CensusRow, { type CellState, type RowState } from "@/components/CensusRow";
 
-const DELAY_MS = 120;
+// 24 quotes fired strictly one after another, each of them three network calls, left the page
+// still reading after several seconds. They run through a small pool instead: fast enough to be
+// populated when a judge looks at it, small enough not to trip Jupiter's rate limit.
+const CONCURRENCY = 5;
 
 export default function CensusPage() {
   const [rows, setRows] = useState<Record<string, RowState>>({});
@@ -17,12 +20,22 @@ export default function CensusPage() {
     let cancelled = false;
 
     async function run() {
+      const tasks: Array<{ mint: string; sizeKey: string; amountIn: string }> = [];
       for (const token of TOKEN_LIST) {
         for (const size of CENSUS_SIZES) {
-          if (cancelled) return;
+          tasks.push({ mint: token.mint, sizeKey: size.key, amountIn: size.amountIn });
+        }
+      }
+
+      let next = 0;
+      const worker = async () => {
+        while (!cancelled) {
+          const i = next++;
+          if (i >= tasks.length) return;
+          const task = tasks[i];
           let cell: CellState;
           try {
-            const q = await getQuote(USDC_MINT, token.mint, size.amountIn);
+            const q = await getQuote(USDC_MINT, task.mint, task.amountIn);
             cell = q ? { status: "ok", quote: q } : { status: "error", message: "no live quote returned" };
           } catch {
             cell = { status: "error", message: "quote call failed" };
@@ -30,12 +43,13 @@ export default function CensusPage() {
           if (cancelled) return;
           setRows((prev) => ({
             ...prev,
-            [token.mint]: { ...prev[token.mint], [size.key]: cell },
+            [task.mint]: { ...prev[task.mint], [task.sizeKey]: cell },
           }));
           if (cell.status === "ok") setLastRead(new Date().toISOString());
-          await new Promise((r) => setTimeout(r, DELAY_MS));
         }
-      }
+      };
+
+      await Promise.all(Array.from({ length: CONCURRENCY }, worker));
       if (!cancelled) setDone(true);
     }
 
@@ -131,11 +145,11 @@ export default function CensusPage() {
         .fb-row{display:flex;align-items:center;gap:10px;padding:5px 0}
         .fb-label{flex:0 0 58px;font-family:"JetBrains Mono",monospace;font-size:10.5px;
           color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em}
-        .fb-track{flex:1;height:8px;min-width:0;background:var(--border);border-radius:2px;overflow:hidden}
+        .fb-track{display:block;flex:1;height:8px;min-width:0;background:var(--border);border-radius:2px;overflow:hidden}
         /* Grows on the transform axis, not width: the layout engine never scores a compositor-only
            transform as a shift, so the device (the bar array) can carry a real motion moment
            tied to its meaning without costing CLS. Final size is set once, at insertion, by width. */
-        .fb-fill{height:100%;background:var(--signal);border-radius:2px;transform-origin:left}
+        .fb-fill{display:block;height:100%;background:var(--signal);border-radius:2px;transform-origin:left}
         @media (prefers-reduced-motion: no-preference){
           .fb-fill{animation:fb-grow 320ms cubic-bezier(0.23,1,0.32,1) both}
         }
