@@ -63,8 +63,8 @@ export default function PoolDrain({ amountUsd, liquidityUsd, refusing }: PoolDra
           lineHeight: 1.6,
         }}
       >
-        your order is {(share * 100).toFixed(2)}% of this token's $
-        {Math.round(liquidityUsd).toLocaleString()} pooled liquidity
+        your order would use {(share * 100).toFixed(2)}% of everything available to trade right
+        now (${Math.round(liquidityUsd).toLocaleString()}). the more you take, the worse the price.
       </div>
     </div>
   );

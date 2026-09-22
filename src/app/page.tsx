@@ -224,7 +224,7 @@ export default function Home() {
           color: "var(--text-primary)",
           margin: "0 0 18px",
         }}>
-          You are about to buy a stock that is not priced like the stock.
+          Buying a stock on Solana? You are probably overpaying, and nothing tells you by how much.
         </h1>
         <p style={{
           fontFamily: '"Archivo", sans-serif',
@@ -234,10 +234,10 @@ export default function Home() {
           margin: "0 0 20px",
           maxWidth: "58ch",
         }}>
-          THE MARK reads the pool your order actually routes into, shows what the fill costs you in
-          percent and in dollars against the price of the real share, and then signs or refuses at a
-          line you set. Nothing here is stored or remembered: every figure is read the moment you
-          look at it.
+          Say you want $500 of Palantir. On Solana you buy a token that tracks the real share, but
+          the price you actually get is worse than the real share price. Sometimes by pennies.
+          Sometimes by hundreds of dollars. THE MARK works out that difference before you buy, in
+          plain dollars, and stops the trade if it is bigger than you said you would accept.
         </p>
         <div style={{
           display: "flex",
@@ -250,15 +250,26 @@ export default function Home() {
           color: "var(--text-dim)",
         }}>
           <span style={{ border: "1px solid var(--border)", borderRadius: "3px", padding: "5px 9px" }}>
-            live from Jupiter
+            1 · pick a stock and an amount
           </span>
           <span style={{ border: "1px solid var(--border)", borderRadius: "3px", padding: "5px 9px" }}>
-            Token-2022 multiplier and fee read on chain
+            2 · see exactly what you overpay
           </span>
           <span style={{ border: "1px solid var(--border)", borderRadius: "3px", padding: "5px 9px" }}>
-            no cached prices
+            3 · it blocks the bad trade
           </span>
         </div>
+        <p style={{
+          fontFamily: '"Archivo", sans-serif',
+          fontSize: "13px",
+          lineHeight: 1.55,
+          color: "var(--text-dim)",
+          margin: "18px 0 0",
+          maxWidth: "58ch",
+        }}>
+          You do not need a wallet to use any of this. Everything below is live right now. A wallet
+          is only needed for the last step, actually placing the order.
+        </p>
       </header>
 
       <main style={{
@@ -279,7 +290,7 @@ export default function Home() {
             letterSpacing: "0.12em",
             marginBottom: "10px",
             fontFamily: '"JetBrains Mono", monospace',
-          }}>Which stock are you buying</div>
+          }}>1 · Which stock do you want</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
             {TOKEN_LIST.map((t) => {
               const active = t.symbol === selectedToken;
@@ -326,10 +337,10 @@ export default function Home() {
             minHeight: "36px",
           }}>
             {quote
-              ? `this token's pooled liquidity, $${Math.round(quote.liquidityUsd).toLocaleString()} read live${
-                  quote.routeLegs > 1 ? `, and the router splits this order across ${quote.routeLegs} legs` : ""
-                }. the trench is this order's cost measured against the line you set.`
-              : "the pool this order routes into, waiting on a live quote"}
+              ? `this is the supply your order is buying from, $${Math.round(quote.liquidityUsd).toLocaleString()} of it${
+                  quote.routeLegs > 1 ? `, spread across ${quote.routeLegs} places` : ""
+                }. the red gouge is the bite your order takes out of it.`
+              : "reading what is available to buy right now"}
           </div>
         </div>
 
@@ -358,9 +369,13 @@ export default function Home() {
           letterSpacing: "-0.01em",
           lineHeight: 1.2,
         } as any}>
-          You end up <span style={{ color: isBelow ? "var(--success)" : "var(--signal)" }}>
+          All in, you end up{" "}
+          <span style={{ color: isBelow ? "var(--success)" : "var(--signal)" }}>
             <Odometer value={Math.abs(netPercent)} />
-          </span>% {isBelow ? "below" : "above"} the share on {selectedToken}
+          </span>
+          % {isBelow ? "cheaper than" : "dearer than"} the real{" "}
+          {selectedToken.replace(/^t/, "").replace(/x$/, "")} share
+          {quote ? `, about $${Math.abs((netPercent / 100) * amountNum).toFixed(2)} on $${amountNum.toFixed(0)}` : ""}
         </p>
 
         {/* Amount Input */}
@@ -371,7 +386,7 @@ export default function Home() {
             textTransform: "uppercase",
             letterSpacing: "0.1em",
             marginBottom: "8px",
-          }}>Amount (USD)</div>
+          }}>2 · How much do you want to spend</div>
           <input
             type="number"
             value={amount}
@@ -444,12 +459,12 @@ export default function Home() {
             fontFamily: '"JetBrains Mono", monospace',
           }}>
             {!quote
-              ? "the multiplier is read from the same call as the price"
+              ? "checking whether this token pays out by quietly growing your balance"
               : !quote.multiplierKnown
-                ? "the multiplier could not be read for this mint, so no unit adjustment is shown"
+                ? "could not check whether this token grows your balance over time, so that is not counted above"
                 : quote.multiplier === 1
-                  ? "this mint's scaled multiplier is exactly 1, so the wallet shows the raw units"
-                  : `this mint's multiplier is ${quote.multiplier.toFixed(6)}, so the wallet shows ${((quote.multiplier - 1) * 100).toFixed(2)}% more units than the raw amount`}
+                  ? "this token does not grow your balance over time, so what you buy is what you hold"
+                  : `this token has grown ${((quote.multiplier - 1) * 100).toFixed(2)}% since launch instead of paying a dividend, and that is counted above`}
           </div>
         </div>
 
@@ -471,7 +486,7 @@ export default function Home() {
               textTransform: "uppercase",
               letterSpacing: "0.12em",
               marginBottom: "6px",
-            }}>Worst fill you will take</div>
+            }}>3 · Block the trade if I overpay more than</div>
             <input
               type="number"
               min="0"
@@ -498,8 +513,8 @@ export default function Home() {
               textTransform: "uppercase",
               letterSpacing: "0.12em",
               marginBottom: "6px",
-            }}>Above that line</div>
-            <div style={{ fontSize: "13px", color: "var(--text-dim)", paddingTop: "8px" }}>this button refuses</div>
+            }}>What happens then</div>
+            <div style={{ fontSize: "13px", color: "var(--text-dim)", paddingTop: "8px" }}>the button below stops you</div>
           </div>
         </div>
 
@@ -526,7 +541,7 @@ export default function Home() {
               color: "var(--signal)",
               marginBottom: "10px",
             }}>
-              Refused
+              Blocked
             </div>
             <div style={{
               fontFamily: '"JetBrains Mono", monospace',
@@ -534,8 +549,11 @@ export default function Home() {
               color: "var(--text-primary)",
               lineHeight: 1.5,
             }}>
-              This fill costs <Odometer value={quote.fillCostPct} suffix="%" style={{ color: "var(--signal)" }} />.
-              You said you would take {limitIsSet ? `${effectiveLimit.toFixed(2)}%` : "no stated line, so nothing passes"}.
+              This order would cost you{" "}
+              <Odometer value={quote.fillCostUsd} prefix="$" style={{ color: "var(--signal)" }} /> extra, which
+              is <Odometer value={quote.fillCostPct} suffix="%" style={{ color: "var(--signal)" }} /> of what
+              you are spending. You said to block anything over{" "}
+              {limitIsSet ? `${effectiveLimit.toFixed(2)}%` : "nothing, so everything is blocked"}.
             </div>
             <div style={{
               fontFamily: '"JetBrains Mono", monospace',
@@ -543,7 +561,7 @@ export default function Home() {
               color: "var(--text-dim)",
               marginTop: "10px",
             }}>
-              lower the amount, or raise the line you set
+              try a smaller amount, a different stock, or raise your limit
             </div>
           </div>
         ) : (
@@ -568,7 +586,13 @@ export default function Home() {
             onMouseOver={(e) => (e.currentTarget.style.background = "var(--surface)")}
             onMouseOut={(e) => (e.currentTarget.style.background = "transparent")}
           >
-            {!connected ? "Connect wallet to sign" : signing ? "Signing…" : settling ? "Waiting for the chain…" : "Set and sign"}
+            {!connected
+              ? "Connect a wallet to place this order"
+              : signing
+                ? "Signing…"
+                : settling
+                  ? "Waiting for the chain…"
+                  : "Place this order"}
           </button>
         )}
 
@@ -665,8 +689,8 @@ export default function Home() {
               lineHeight: 1.5,
               color: "var(--text-muted)",
             }}>
-              Every tokenized stock measured at three order sizes at once, live, on one shared scale.
-              It is where the claim above stops being an opinion.
+              The same check run on every stock at once, for three different amounts. Some cost you
+              almost nothing. One costs you forty times more. Worth a look before you pick.
             </div>
           </a>
           <a
@@ -694,8 +718,8 @@ export default function Home() {
               lineHeight: 1.5,
               color: "var(--text-muted)",
             }}>
-              Paste a signature and it reads that transaction off the chain and reconciles it against
-              what this screen promised before it was signed.
+              Paste the receipt code from any past trade and it checks, against the public record,
+              whether what was promised beforehand is what actually happened.
             </div>
           </a>
         </div>

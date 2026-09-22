@@ -26,15 +26,15 @@ export default function PriceAxis({
   // Text numbers travel without going through React state; only the bar geometry,
   // which must re-lay-out, stays on state.
   const money = useCallback((n: number) => `$${n.toFixed(2)}`, []);
-  const pctFill = useCallback((n: number) => `${n.toFixed(2)}% fill`, []);
-  const limitText = useCallback((n: number) => `your line ${n.toFixed(2)}%`, []);
+  const pctFill = useCallback((n: number) => `the trade itself costs ${n.toFixed(2)}%`, []);
+  const limitText = useCallback((n: number) => `your limit ${n.toFixed(2)}%`, []);
   const tokenRef = useOdometerRef<SVGTextElement>(tokenPrice, money);
   const shareRef = useOdometerRef<SVGTextElement>(sharePrice, money);
   const fillRef = useOdometerRef<SVGTextElement>(fillPercent, pctFill);
   const limitRef = useOdometerRef<SVGTextElement>(limitPct, limitText);
   const costRef = useOdometerRef<SVGTextElement>(
     (amount * fillPercent) / 100,
-    useCallback((n: number) => `$${n.toFixed(2)} on $${amount.toFixed(0)}`, [amount])
+    useCallback((n: number) => `$${n.toFixed(2)} extra on $${amount.toFixed(0)}`, [amount])
   );
   const shownFill = useCountUp(fillPercent);
 
@@ -103,12 +103,12 @@ export default function PriceAxis({
             basis gap does. The ticks below them carry the position. */}
         <text ref={tokenRef} x="120" y="64" textAnchor="start" fontSize="58" fill="#FAFAFA" fontFamily="JetBrains Mono" />
         <text x="120" y="106" textAnchor="start" fontSize="24" fill="#71717A" fontFamily="Archivo" letterSpacing="0.14em">
-          YOU PAY
+          YOU PAY PER SHARE
         </text>
 
         <text ref={shareRef} x="900" y="64" textAnchor="end" fontSize="58" fill="#FAFAFA" fontFamily="JetBrains Mono" />
         <text x="900" y="106" textAnchor="end" fontSize="24" fill="#71717A" fontFamily="Archivo" letterSpacing="0.14em">
-          THE SHARE
+          REAL SHARE PRICE
         </text>
 
         {/* The track: what you pay at the left, the line you set at the right. */}
