@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>THE MARK · A</title>
+  <link rel="stylesheet" href="../parts/Archivo.css">
+  <link rel="stylesheet" href="../parts/JetBrainsMono.css">
+  <style>
+    :root {
+      --bg: #0A0A0F;
+      --surface: #12121A;
+      --signal: #C4261D;
+      --success: #0B7A3B;
+      --text-primary: #FAFAFA;
+      --text-muted: #A1A1AA;
+      --text-dim: #71717A;
+      --border: #27272A;
+      font-family: "Archivo", sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+      }
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    main {
+      width: 100%;
+      max-width: 580px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 32px;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 400;
+      margin-bottom: 96px;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+    }
+    .headline {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+      font-family: "JetBrains Mono", monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+    .slider-section {
+      margin-bottom: 32px;
+    }
+    .amount-label {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+    }
+    .amount-input {
+      width: 100%;
+      padding: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 16px;
+      margin-bottom: 16px;
+    }
+    .slider-wrapper {
+      position: relative;
+    }
+    .slider-input {
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(to right, var(--signal) 0%, var(--signal) var(--slider-fill, 0%), var(--border) var(--slider-fill, 0%), var(--border) 100%);
+      outline: none;
+      border-radius: 2px;
+      -webkit-appearance: none;
+      appearance: none;
+      --slider-fill: 0%;
+    }
+    .slider-input::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: var(--ink-color, var(--text-primary));
+      border: 1px solid var(--text-primary);
+      border-radius: 50%;
+      cursor: pointer;
+      transition: background 120ms ease-out;
+    }
+    .slider-input::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: var(--ink-color, var(--text-primary));
+      border: 1px solid var(--text-primary);
+      border-radius: 50%;
+      cursor: pointer;
+      transition: background 120ms ease-out;
+    }
+    .slider-ticks {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 8px;
+      margin-top: 8px;
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    .axis-section {
+      margin: 96px -32px;
+      padding: 96px 32px;
+      background: var(--bg);
+      data-device: mark-axis-a;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      animation: axis-pop 1400ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+    }
+
+    @keyframes axis-pop {
+      from { transform: scaleY(0.8); opacity: 0.7; }
+      to { transform: scaleY(1); opacity: 1; }
+    }
+
+    .receipt-section {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px;
+      margin: 32px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .receipt-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      padding: 8px 0;
+      font-size: 14px;
+    }
+    .receipt-line:not(:last-child) {
+      border-bottom: 1px solid var(--border);
+    }
+    .receipt-label {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .receipt-value {
+      color: var(--text-primary);
+      font-family: "JetBrains Mono", monospace;
+      text-align: right;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin: 32px 0;
+      padding: 24px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .info-item {
+      text-align: left;
+    }
+    .info-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 6px;
+    }
+    .info-value {
+      font-size: 16px;
+      font-family: "JetBrains Mono", monospace;
+      color: var(--text-primary);
+      line-height: 1.3;
+    }
+
+    .action-button {
+      width: 100%;
+      padding: 16px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      font-family: "Archivo", sans-serif;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 120ms ease-out;
+      margin-top: 24px;
+    }
+    .action-button:hover:not(:disabled) {
+      background: var(--surface);
+      border-color: var(--text-primary);
+    }
+    .action-button:disabled {
+      border-color: var(--signal);
+      color: var(--signal);
+      cursor: not-allowed;
+    }
+
+    .multiplier-note {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 16px;
+      font-family: "JetBrains Mono", monospace;
+    }
+
+    @media (max-width: 600px) {
+      main {
+        padding: 20px;
+      }
+      h1 {
+        font-size: 18px;
+        margin-bottom: 80px;
+      }
+      .axis-section {
+        margin: 80px -20px;
+        padding: 80px 20px;
+      }
+      .info-grid {
+        gap: 16px;
+        margin: 24px 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="headline">The Mark · A</div>
+    <h1 id="headline">You end up <span id="netPercent" style="color: var(--success);">0.61</span>% below the share</h1>
+
+    <div class="slider-section">
+      <div class="amount-label">Amount (USD)</div>
+      <input type="number" class="amount-input" id="amountInput" min="500" max="25000" value="500" step="100">
+      <div class="slider-wrapper">
+        <input type="range" class="slider-input" id="amountSlider" min="500" max="25000" value="500" step="100">
+        <div class="slider-ticks">
+          <span>$500</span>
+          <span>$5K</span>
+          <span>$25K</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="axis-section" data-device="mark-axis-a">
+      <svg id="priceAxis" viewBox="0 0 1000 120" preserveAspectRatio="xMidYMid meet">
+        <!-- Token tick (2px full-height rule at 12%) -->
+        <line id="tokenTick" x1="120" y1="0" x2="120" y2="120" stroke="#666" stroke-width="2"/>
+        <!-- Token price label (20px mono) -->
+        <text x="120" y="60" text-anchor="middle" font-size="20" fill="#888" font-family="JetBrains Mono">$181.86</text>
+        <!-- Token role label -->
+        <text x="120" y="85" text-anchor="middle" font-size="13" fill="#666" font-family="Archivo">you pay</text>
+
+        <!-- Share tick (2px full-height rule at 78%) -->
+        <line id="shareTick" x1="780" y1="0" x2="780" y2="120" stroke="#666" stroke-width="2"/>
+        <!-- Share price label (20px mono) -->
+        <text x="780" y="60" text-anchor="middle" font-size="20" fill="#888" font-family="JetBrains Mono">$184.37</text>
+        <!-- Share role label -->
+        <text x="780" y="85" text-anchor="middle" font-size="13" fill="#666" font-family="Archivo">the share</text>
+
+        <!-- End tick (2px full-height rule at 98%) -->
+        <line id="endTick" x1="980" y1="0" x2="980" y2="120" stroke="#666" stroke-width="2"/>
+
+        <!-- Order bar (10px accent bar from token) -->
+        <rect id="orderBar" x="120" y="50" width="150" height="10" fill="#0B7A3B" rx="1"/>
+        <!-- Bar label (12px dim text on bar) -->
+        <text id="barLabel" x="180" y="63" font-size="12" fill="#666" font-family="JetBrains Mono">0.75% fill</text>
+      </svg>
+    </div>
+
+    <div class="receipt-section">
+      <div class="receipt-line">
+        <span class="receipt-label">That is dollars and cents</span>
+        <span class="receipt-value" id="costValue">$3.75 on $500</span>
+      </div>
+      <div class="receipt-line">
+        <span class="receipt-label">Basis</span>
+        <span class="receipt-value" id="basisValue">token 1.36% below</span>
+      </div>
+      <div class="receipt-line">
+        <span class="receipt-label">Your order takes</span>
+        <span class="receipt-value" id="depthValue">0.03% of pool's $271K</span>
+      </div>
+      <div class="multiplier-note" id="multiplierNote">this mint's multiplier is 1, so the wallet shows the same units</div>
+    </div>
+
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="info-label">Worst fill you will take</div>
+        <input type="number" class="amount-input" id="maxFill" min="0" max="10" value="2.5" step="0.01" placeholder="2.5" style="padding: 8px; font-size: 14px; margin: 0;">
+      </div>
+      <div class="info-item">
+        <div class="info-label">Above that line</div>
+        <div style="font-size: 13px; color: var(--text-dim); padding-top: 8px;">this button refuses</div>
+      </div>
+    </div>
+
+    <button class="action-button" id="signButton">Set and sign</button>
+  </main>
+
+  <script>
+    const amountInput = document.getElementById('amountInput');
+    const amountSlider = document.getElementById('amountSlider');
+    const headline = document.getElementById('headline');
+    const netPercent = document.getElementById('netPercent');
+    const costValue = document.getElementById('costValue');
+    const depthValue = document.getElementById('depthValue');
+    const basisValue = document.getElementById('basisValue');
+    const barLabel = document.getElementById('barLabel');
+    const maxFill = document.getElementById('maxFill');
+    const signButton = document.getElementById('signButton');
+    const multiplierNote = document.getElementById('multiplierNote');
+
+    const PLTRx_MINT = 'XsoBhf2ufR8fTyNSjqfU71DYGaE6Z3SUGAidpzriAA4'; // Resolved 2026-09-22T15:15Z
+
+    let tokenPriceVal = 181.86;
+    let sharePriceVal = 184.37;
+    let multiplier = 1;
+
+    async function fetchData() {
+      try {
+        const priceRes = await fetch(`https://lite-api.jup.ag/price/v3?ids=${PLTRx_MINT}`);
+        const priceData = await priceRes.json();
+        if (priceData.data && priceData.data[PLTRx_MINT]) {
+          tokenPriceVal = priceData.data[PLTRx_MINT].usdPrice || 181.86;
+          sharePriceVal = priceData.data[PLTRx_MINT].stockData?.price || 184.37;
+        }
+        updateDisplay();
+      } catch (e) {
+        console.error('Price fetch failed:', e);
+      }
+    }
+
+    function priceToSvgX(price) {
+      // Linear mapping: token at 12%, share at 78%
+      // price_range = sharePriceVal - tokenPriceVal
+      // percent = 12 + (price - tokenPriceVal) / price_range * 66
+      const priceRange = sharePriceVal - tokenPriceVal;
+      const percent = 12 + (price - tokenPriceVal) / priceRange * 66;
+      return percent * 10; // Convert percent to SVG units (1000 width)
+    }
+
+    function updateDisplay() {
+      const amount = parseFloat(amountInput.value) || 500;
+
+      // Estimate fill cost: 500->0.75%, 25000->2.80%
+      const fillPercent = 0.75 + ((amount - 500) / (25000 - 500)) * (2.80 - 0.75);
+      const fillDollars = (amount * fillPercent) / 100;
+
+      // Basis: (token - share) / share
+      const basis = ((tokenPriceVal - sharePriceVal) / sharePriceVal) * 100;
+
+      // Net: basis + fill
+      const net = basis + fillPercent;
+
+      // Update slider fill percentage
+      const fillPercent_ = ((amount - 500) / (25000 - 500)) * 100;
+      amountSlider.style.setProperty('--slider-fill', fillPercent_ + '%');
+
+      // Update headline and color
+      const sign = net < 0 ? 'below' : 'above';
+      const absNet = Math.abs(net);
+      const netClass = net < 0 ? 'var(--success)' : 'var(--signal)';
+      netPercent.textContent = absNet.toFixed(2);
+      netPercent.style.color = netClass;
+      headline.innerHTML = `You end up <span id="netPercent" style="color: ${netClass};">${absNet.toFixed(2)}</span>% ${sign} the share`;
+
+      // Update slider handle color
+      if (net >= 0) {
+        amountSlider.style.setProperty('--ink-color', 'var(--signal)');
+      } else {
+        amountSlider.style.setProperty('--ink-color', 'var(--text-primary)');
+      }
+
+      // Receipt values
+      costValue.textContent = `$${fillDollars.toFixed(2)} on $${amount}`;
+
+      // Basis text
+      const basisSign = basis < 0 ? 'below' : 'above';
+      const absBasis = Math.abs(basis);
+      basisValue.textContent = `token ${absBasis.toFixed(2)}% ${basisSign}`;
+
+      // Depth used
+      const depthUsed = (amount / (sharePriceVal * 10000)) * 100;
+      depthValue.textContent = `${depthUsed.toFixed(2)}% of pool's $271K`;
+
+      // Update bar and label
+      updateAxisBar(fillPercent);
+      barLabel.textContent = `${fillPercent.toFixed(2)}% fill`;
+
+      // Handle button state
+      if (Math.abs(net) > parseFloat(maxFill.value)) {
+        signButton.disabled = true;
+        signButton.textContent = 'This order exceeds your limit';
+      } else {
+        signButton.disabled = false;
+        signButton.textContent = 'Set and sign';
+      }
+    }
+
+    function updateAxisBar(fillPercent) {
+      // Calculate where the bar ends
+      const fillInPrice = sharePriceVal * (fillPercent / 100);
+      const barEndPrice = tokenPriceVal + fillInPrice;
+
+      const tokenX = priceToSvgX(tokenPriceVal);
+      const barEndX = priceToSvgX(barEndPrice);
+      const shareX = priceToSvgX(sharePriceVal);
+
+      const barWidth = Math.max(2, barEndX - tokenX);
+
+      const orderBar = document.getElementById('orderBar');
+      orderBar.setAttribute('x', tokenX);
+      orderBar.setAttribute('width', barWidth);
+      orderBar.setAttribute('fill', barEndPrice >= sharePriceVal ? 'var(--signal)' : 'var(--success)');
+
+      // Position label on the bar
+      barLabel.setAttribute('x', tokenX + barWidth / 2);
+      barLabel.setAttribute('text-anchor', 'middle');
+    }
+
+    function updateMultiplierDisplay() {
+      const multiplierLabel = multiplier === 1 ? '1' : multiplier.toFixed(8);
+      const multiplierDiff = (multiplier - 1) * 100;
+      if (multiplier === 1) {
+        multiplierNote.textContent = 'this mint\'s multiplier is 1, so the wallet shows the same units';
+      } else {
+        multiplierNote.textContent = `this mint's multiplier is ${multiplierLabel}, so the wallet will show ${multiplierDiff.toFixed(4)}% more units`;
+      }
+    }
+
+    amountInput.addEventListener('input', (e) => {
+      amountSlider.value = e.target.value;
+      updateDisplay();
+    });
+
+    amountSlider.addEventListener('input', (e) => {
+      amountInput.value = e.target.value;
+      updateDisplay();
+    });
+
+    maxFill.addEventListener('input', updateDisplay);
+
+    signButton.addEventListener('click', () => {
+      if (!signButton.disabled) {
+        alert('Signed at ' + new Date().toLocaleTimeString('en-US', { hour12: false }));
+      }
+    });
+
+    fetchData();
+    updateMultiplierDisplay();
+  </script>
+</body>
+</html>

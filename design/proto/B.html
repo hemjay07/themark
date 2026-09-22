@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>THE MARK · B</title>
+  <link rel="stylesheet" href="../parts/Archivo.css">
+  <link rel="stylesheet" href="../parts/JetBrainsMono.css">
+  <style>
+    :root {
+      --bg: #0A0A0F;
+      --surface: #12121A;
+      --signal: #C4261D;
+      --success: #0B7A3B;
+      --text-primary: #FAFAFA;
+      --text-muted: #A1A1AA;
+      --text-dim: #71717A;
+      --border: #27272A;
+      font-family: "Archivo", sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+      }
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    main {
+      width: 100%;
+      max-width: 580px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 32px;
+    }
+    h1 {
+      font-size: clamp(20px, 4vw, 28px);
+      font-weight: 400;
+      margin-bottom: 32px;
+      letter-spacing: -0.01em;
+    }
+    .headline {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 20px;
+    }
+
+    .slider-section {
+      margin-bottom: 32px;
+    }
+    .amount-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+    }
+    .amount-input {
+      width: 100%;
+      padding: 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    .slider-input {
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      outline: none;
+      border-radius: 2px;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .slider-input::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      background: var(--signal);
+      border: 1px solid var(--text-primary);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .slider-input::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      background: var(--signal);
+      border: 1px solid var(--text-primary);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    .tape-container {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px;
+      margin: 32px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      data-device: mark-tape-b;
+    }
+
+    .tape-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    .tape-line:last-child {
+      border-bottom: none;
+    }
+    .tape-label {
+      color: var(--text-muted);
+      flex: 0 0 auto;
+      font-size: 13px;
+    }
+    .tape-value {
+      color: var(--text-primary);
+      font-family: "JetBrains Mono", monospace;
+      text-align: right;
+      flex: 1;
+      font-weight: 400;
+    }
+    .tape-value.warn {
+      color: var(--signal);
+    }
+
+    [data-device="mark-tape-b"] .meter-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      animation: meter-pop 1400ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+    }
+    .meter-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    @keyframes meter-pop {
+      from { transform: scale(0.95); opacity: 0.7; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .meter-label {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .meter-display-inline {
+      font-size: 28px;
+      font-family: "JetBrains Mono", monospace;
+      font-weight: 400;
+      text-align: right;
+      letter-spacing: -0.01em;
+      transition: color 80ms ease-out;
+    }
+    .meter-display-inline.warn {
+      color: var(--signal);
+    }
+
+    .tape-meta {
+      font-size: 11px;
+      color: var(--text-dim);
+      padding-top: 8px;
+      font-style: italic;
+    }
+
+    .info-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin: 24px 0;
+      padding: 20px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .info-item {
+      text-align: left;
+    }
+    .info-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 4px;
+    }
+    .info-value {
+      font-size: 16px;
+      font-family: "JetBrains Mono", monospace;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+
+    .action-button {
+      width: 100%;
+      padding: 14px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      font-family: "Archivo", sans-serif;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 120ms ease-out;
+      margin-top: 20px;
+    }
+    .action-button:hover:not(:disabled) {
+      background: var(--surface);
+      border-color: var(--text-primary);
+    }
+    .action-button:disabled {
+      border-color: var(--signal);
+      color: var(--signal);
+      cursor: not-allowed;
+    }
+
+    .footnote {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 16px;
+      font-family: "JetBrains Mono", monospace;
+      text-align: center;
+    }
+
+    @media (max-width: 600px) {
+      main {
+        padding: 20px;
+      }
+      h1 {
+        font-size: 18px;
+        margin-bottom: 20px;
+      }
+      .tape-container {
+        padding: 16px;
+      }
+      .meter-row {
+        grid-template-columns: 1fr;
+      }
+      .info-row {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="headline">The Mark · B</div>
+    <h1>Set your limit, then review the cost tape</h1>
+
+    <div class="slider-section">
+      <div class="amount-label">Maximum fill you accept</div>
+      <input type="number" class="amount-input" id="maxFill" min="0" max="10" value="2.5" step="0.01" placeholder="2.5">
+    </div>
+
+    <div class="tape-container" data-device="mark-tape-b">
+      <div class="tape-line">
+        <span class="tape-label">Amount (USD)</span>
+        <input type="number" class="amount-input" id="amountInput" min="500" max="25000" value="500" step="100" style="width: 120px; padding: 4px 8px; background: transparent; border: none; text-align: right; font-size: 13px;">
+      </div>
+      <input type="range" class="slider-input" id="amountSlider" min="500" max="25000" value="500" step="100" style="grid-column: 1/-1; margin: 8px 0;">
+
+      <div class="meter-row">
+        <span class="meter-label">Fill Cost on this order</span>
+        <div class="meter-display-inline" id="meterPercent">0.75</div>
+      </div>
+
+      <div class="tape-line">
+        <span class="tape-label">That is dollars and cents</span>
+        <span class="tape-value" id="costDollars">$3.75 on $500</span>
+      </div>
+
+      <div class="tape-line">
+        <span class="tape-label">Token holds liquidity</span>
+        <span class="tape-value" id="depthText">0.18% of $271K</span>
+      </div>
+
+      <div class="tape-line">
+        <span class="tape-label">Token price</span>
+        <span class="tape-value" id="tokenPrice">$181.86</span>
+      </div>
+
+      <div class="tape-line">
+        <span class="tape-label">Share price</span>
+        <span class="tape-value" id="sharePrice">$184.37</span>
+      </div>
+
+      <div class="tape-line">
+        <span class="tape-label">Gap is the rest is fill</span>
+        <span class="tape-value" id="gapText">1.36% gap, rest fill</span>
+      </div>
+
+      <div class="tape-meta">Counted at the click</div>
+    </div>
+
+    <button class="action-button" id="signButton">Sign above this line</button>
+
+    <p class="footnote">Above that, this button refuses</p>
+  </main>
+
+  <script>
+    const amountInput = document.getElementById('amountInput');
+    const amountSlider = document.getElementById('amountSlider');
+    const meterPercent = document.getElementById('meterPercent');
+    const costDollars = document.getElementById('costDollars');
+    const tokenPrice = document.getElementById('tokenPrice');
+    const sharePrice = document.getElementById('sharePrice');
+    const depthText = document.getElementById('depthText');
+    const gapText = document.getElementById('gapText');
+    const maxFill = document.getElementById('maxFill');
+    const signButton = document.getElementById('signButton');
+
+    const PLTRx_MINT = 'XsoBhf2ufR8fTyNSjqfU71DYGaE6Z3SUGAidpzriAA4'; // Resolved 2026-09-22T15:15Z
+
+    let tokenPriceVal = 181.86;
+    let sharePriceVal = 184.37;
+    let animationFrameId = null;
+
+    async function fetchData() {
+      try {
+        const priceRes = await fetch(`https://lite-api.jup.ag/price/v3?ids=${PLTRx_MINT}`);
+        const priceData = await priceRes.json();
+        if (priceData.data && priceData.data[PLTRx_MINT]) {
+          tokenPriceVal = priceData.data[PLTRx_MINT].usdPrice || 181.86;
+          sharePriceVal = priceData.data[PLTRx_MINT].stockData?.price || 184.37;
+          updateDisplay();
+        }
+      } catch (e) {
+        console.error('Price fetch failed:', e);
+      }
+    }
+
+    function animateMeter(startVal, endVal) {
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+      const startTime = performance.now();
+      const duration = 1400;
+
+      function frame(currentTime) {
+        const elapsed = Math.min(currentTime - startTime, duration);
+        const progress = elapsed / duration;
+
+        // Easing: cubic-bezier(0.23, 1, 0.32, 1)
+        const eased = cubicBezier(progress, 0.23, 1, 0.32, 1);
+        const currentVal = startVal + (endVal - startVal) * eased;
+
+        meterPercent.textContent = currentVal.toFixed(2);
+
+        if (elapsed < duration) {
+          animationFrameId = requestAnimationFrame(frame);
+        }
+      }
+
+      animationFrameId = requestAnimationFrame(frame);
+    }
+
+    function cubicBezier(t, p1x, p1y, p2x, p2y) {
+      const mt = 1 - t;
+      return 3 * mt * mt * t * p1y + 3 * mt * t * t * p2y + t * t * t;
+    }
+
+    function updateDisplay() {
+      const amount = parseFloat(amountInput.value) || 500;
+
+      // Estimate fill cost: 500->0.75%, 25000->2.80%
+      const fillPercent = 0.75 + ((amount - 500) / (25000 - 500)) * (2.80 - 0.75);
+      const fillDollars = (amount * fillPercent) / 100;
+
+      const gap = ((sharePriceVal - tokenPriceVal) / sharePriceVal) * 100;
+      const rest = fillPercent - gap;
+
+      animateMeter(0.75, fillPercent);
+      costDollars.textContent = `$${fillDollars.toFixed(2)} on $${amount}`;
+
+      tokenPrice.textContent = `$${tokenPriceVal.toFixed(2)}`;
+      sharePrice.textContent = `$${sharePriceVal.toFixed(2)}`;
+      gapText.textContent = `${Math.abs(gap).toFixed(2)}% gap, ${rest.toFixed(2)}% fill`;
+
+      const depthUsed = (amount / (sharePriceVal * 10000)) * 100;
+      depthText.textContent = `${depthUsed.toFixed(2)}% of $271K`;
+
+      const meterEl = document.getElementById('meterPercent');
+
+      if (fillPercent > parseFloat(maxFill.value)) {
+        meterEl.classList.add('warn');
+        signButton.disabled = true;
+        signButton.textContent = 'This order exceeds your limit';
+      } else {
+        meterEl.classList.remove('warn');
+        signButton.disabled = false;
+        signButton.textContent = 'Sign above this line';
+      }
+    }
+
+    amountInput.addEventListener('input', (e) => {
+      amountSlider.value = e.target.value;
+      updateDisplay();
+    });
+
+    amountSlider.addEventListener('input', (e) => {
+      amountInput.value = e.target.value;
+      updateDisplay();
+    });
+
+    maxFill.addEventListener('input', updateDisplay);
+
+    signButton.addEventListener('click', () => {
+      if (!signButton.disabled) {
+        alert('Signed at ' + new Date().toLocaleTimeString('en-US', { hour12: false }));
+      }
+    });
+
+    fetchData();
+    updateDisplay();
+  </script>
+</body>
+</html>
