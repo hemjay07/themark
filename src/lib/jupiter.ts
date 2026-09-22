@@ -3,7 +3,6 @@ import { USDC_MINT, getToken } from "./tokens";
 
 export type { ParsedExtension } from "./types";
 
-const JUPITER_BASE_URL = "https://lite-api.jup.ag";
 const JUPITER_QUOTE_URL = "https://lite-api.jup.ag/swap/v1"; // quote-api.jup.ag does not resolve; verified 2026-09-22
 
 // Reads the mint's Token-2022 extensions through this app's own route, because the public
@@ -169,7 +168,8 @@ export async function fetchPrices(mints: string[]): Promise<Record<string, Price
   mints.forEach((m) => params.append("ids", m));
 
   try {
-    const res = await fetchWithRetry(`${JUPITER_BASE_URL}/price/v3?${params}`);
+    // through this app's own queue, never straight from the browser (see src/app/api/jup/route.ts)
+    const res = await fetchWithRetry(`/api/jup?path=/price/v3&${params}`);
     if (!res) {
       console.warn("Jupiter price unavailable after retries");
       return {};
@@ -208,7 +208,7 @@ export async function getQuote(
   });
 
   try {
-    const res = await fetchWithRetry(`${JUPITER_QUOTE_URL}/quote?${params}`);
+    const res = await fetchWithRetry(`/api/jup?path=/swap/v1/quote&${params}`);
     if (!res) {
       console.error("Quote unavailable after retries");
       return null;
