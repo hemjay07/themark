@@ -31,7 +31,11 @@ export default function FillBar({ label, cell, scaleMax }: FillBarProps) {
         </span>
       )}
       {cell.status === "pending" && <span className="fb-value fb-dim">reading…</span>}
-      {cell.status === "error" && <span className="fb-value fb-dim">no read</span>}
+      {cell.status === "error" && (
+        <span className="fb-value fb-dim" title={cell.message}>
+          {cell.message?.includes("rate-limit") ? "throttled" : "no read"}
+        </span>
+      )}
     </div>
   );
 }

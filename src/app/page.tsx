@@ -7,8 +7,11 @@ import { TOKEN_LIST, getTokenBySymbol, USDC_MINT, getToken } from "@/lib/tokens"
 import type { QuoteResult, Receipt as ReceiptType } from "@/lib/types";
 import PriceAxis from "@/components/PriceAxis";
 import PoolDrain from "@/components/PoolDrain";
-import PoolWell from "@/components/PoolWell";
+import PoolHero from "@/components/PoolHero";
 import Odometer from "@/components/Odometer";
+import KeptVsLost from "@/components/KeptVsLost";
+import RouteBreakdown from "@/components/RouteBreakdown";
+import IssuerControlBadges from "@/components/IssuerControlBadges";
 
 export default function Home() {
   const [amount, setAmount] = useState("5000");
@@ -253,7 +256,12 @@ export default function Home() {
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "20px" }}>
       {/* The fold says what this is before it shows the instrument. A stranger arriving here
           should know the product and the claim in three seconds, without reading a number. */}
-      <header style={{ width: "100%", maxWidth: "720px", padding: "48px 4px 36px" }}>
+      <PoolHero
+        orderShare={quote && quote.liquidityUsd > 0 ? amountNum / quote.liquidityUsd : 0}
+        fillPct={quote?.fillCostPct ?? 0}
+        limitPct={effectiveLimit}
+      >
+      <header style={{ width: "100%", maxWidth: "720px", margin: "0 auto", padding: "64px 20px 56px" }}>
         <h1 style={{
           fontFamily: '"Archivo", sans-serif',
           fontSize: "clamp(28px, 5.2vw, 46px)",
@@ -374,29 +382,21 @@ export default function Home() {
           </div>
         </div>
 
-        {/* The device: the pool this order routes through, with the order carved into it.
-            Its trench depth is the impact the router returned for this exact amount. */}
-        <div style={{ margin: "28px 0 20px" }}>
-          <PoolWell
-            orderShare={quote && quote.liquidityUsd > 0 ? amountNum / quote.liquidityUsd : 0}
-            fillPct={quote?.fillCostPct ?? 0}
-            limitPct={effectiveLimit}
-          />
-          <div style={{
-            marginTop: "8px",
-            fontSize: "11px",
-            fontFamily: '"JetBrains Mono", monospace',
-            color: "var(--text-dim)",
-            letterSpacing: "0.04em",
-            lineHeight: 1.6,
-            minHeight: "36px",
-          }}>
-            {quote
-              ? `this is the supply your order is buying from, $${Math.round(quote.liquidityUsd).toLocaleString()} of it${
-                  quote.routeLegs > 1 ? `, spread across ${quote.routeLegs} places` : ""
-                }. the red gouge is the bite your order takes out of it.`
-              : "reading what is available to buy right now"}
-          </div>
+        {/* The pool itself is now the ground of the fold above, not a tile in this card. */}
+        <div style={{
+          marginBottom: "22px",
+          fontSize: "11px",
+          fontFamily: '"JetBrains Mono", monospace',
+          color: "var(--text-dim)",
+          letterSpacing: "0.04em",
+          lineHeight: 1.6,
+          minHeight: "36px",
+        }}>
+          {quote
+            ? `the surface behind this page is the supply your order buys from, $${Math.round(quote.liquidityUsd).toLocaleString()} of it${
+                quote.routeLegs > 1 ? `, spread across ${quote.routeLegs} places` : ""
+              }. the gouge in it is the bite your order takes.`
+            : "reading what is available to buy right now"}
         </div>
 
         {/* The number this surface exists to say, at the size that says it. It used to be
@@ -434,6 +434,20 @@ export default function Home() {
               : "reading the pool right now"}
           </div>
         </div>
+
+        {/* Kept versus lost, in absolute dollars. Same figures already on screen above, said
+            the way a stranger feels them: what becomes shares, what is gone in costs. */}
+        {quote && (
+          <div style={{
+            background: "var(--bg)",
+            border: "1px solid var(--border)",
+            borderRadius: "6px",
+            padding: "18px 20px",
+            marginBottom: "8px",
+          }}>
+            <KeptVsLost amountInUsd={quote.amountInUsd} costUsd={quote.fillCostUsd} />
+          </div>
+        )}
 
         {/* Price Axis. The wrapper holds the axis's exact aspect ratio before the quote
             lands, so the arriving numbers do not push the page down. */}
@@ -559,6 +573,43 @@ export default function Home() {
                   : `this token has grown ${((quote.multiplier - 1) * 100).toFixed(2)}% since launch instead of paying a dividend, and that is counted above`}
           </div>
         </div>
+
+        {/* Where the money actually goes: the router's own routePlan, already fetched with
+            every quote and never shown until now. */}
+        <div style={{
+          background: "var(--bg)",
+          border: "1px solid var(--border)",
+          borderRadius: "6px",
+          padding: "20px",
+          marginBottom: "32px",
+        }}>
+          {quote ? <RouteBreakdown raw={quote.raw} /> : (
+            <div style={{
+              fontFamily: '"JetBrains Mono", monospace',
+              fontSize: "12px",
+              color: "var(--text-dim)",
+            }}>
+              reading where this order would route
+            </div>
+          )}
+        </div>
+
+        {/* What the issuer of this mint can do to a holder's money, read live off the mint
+            account. A failed read is never shown as a clean bill (charter ban 1). */}
+        {(quote || loading) && (
+          <div style={{
+            background: "var(--bg)",
+            border: "1px solid var(--border)",
+            borderRadius: "6px",
+            padding: "20px",
+            marginBottom: "32px",
+          }}>
+            <IssuerControlBadges
+              extensions={quote ? quote.extensions : null}
+              loading={!quote}
+            />
+          </div>
+        )}
 
         {/* Worst Fill Input */}
         <div style={{
@@ -742,6 +793,8 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      </PoolHero>
 
       {/* The rest of the product, said plainly, so a reader knows there are two more surfaces. */}
       <section style={{ width: "100%", maxWidth: "720px", padding: "44px 4px 64px" }}>

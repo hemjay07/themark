@@ -2,7 +2,13 @@
 
 import { useEffect, useRef } from "react";
 
+type PoolVariant = "tile" | "hero" | "band";
+
 interface PoolWellProps {
+  // tile: the bordered panel it used to be.
+  // hero: full-bleed behind the fold, the page's ground rather than an object on it.
+  // band: a short strip carrying the same material across the other surfaces.
+  variant?: PoolVariant;
   // your order as a fraction of the pool's live depth (0..1)
   orderShare: number;
   // the fill cost the router returned for this exact order, in percent
@@ -73,7 +79,15 @@ const FRAG = `#version 300 es
     vec2 g = abs(fract(vUv * vec2(48.0, 22.0)) - 0.5);
     float grid = (1.0 - smoothstep(0.0, 0.04, min(g.x, g.y))) * 0.08;
 
-    vec3 col = base * (0.30 + lambert * 0.95) + contour + grid;
+    vec3 col = base * (0.26 + lambert * 1.05) + contour + grid;
+
+    // distance falloff, so the plane recedes instead of tiling forever
+    float depthFade = smoothstep(1.0, 0.12, vUv.y);
+    col *= mix(0.35, 1.0, depthFade);
+
+    // fine grain, the one material that carries onto the rest of the page
+    float g2 = fract(sin(dot(vUv * 937.0, vec2(12.9898, 78.233))) * 43758.5453);
+    col += (g2 - 0.5) * 0.022;
 
     // the rim where the order stops
     float rim = 1.0 - smoothstep(0.0, 0.008, abs(vUv.x - max(uOrderX, 0.14)));
@@ -146,7 +160,7 @@ function compile(gl: WebGL2RenderingContext, type: number, src: string) {
   return sh;
 }
 
-export default function PoolWell({ orderShare, fillPct, limitPct }: PoolWellProps) {
+export default function PoolWell({ orderShare, fillPct, limitPct, variant = "tile" }: PoolWellProps) {
   const hostRef = useRef<HTMLCanvasElement | null>(null);
   const targetRef = useRef({ x: 0, d: 0, over: 0 });
 
@@ -169,7 +183,10 @@ export default function PoolWell({ orderShare, fillPct, limitPct }: PoolWellProp
       canvas.dataset.webgl = "unavailable";
       const ctx2d = canvas.getContext("2d");
       if (ctx2d) {
-        const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+        // The hero is a soft lit ground behind type, so it renders at well under one device pixel
+      // per CSS pixel and is scaled up by CSS. At full resolution it cost 83ms p95 against a
+      // 34ms budget; nothing in the image needs that density.
+      const dpr = variant === "tile" ? Math.min(1.5, window.devicePixelRatio || 1) : 0.5;
         canvas.width = Math.max(1, Math.floor(canvas.clientWidth * dpr));
         canvas.height = Math.max(1, Math.floor(canvas.clientHeight * dpr));
         ctx2d.fillStyle = "#0B0B10";
@@ -206,8 +223,8 @@ export default function PoolWell({ orderShare, fillPct, limitPct }: PoolWellProp
 
     // a grid of triangles: the pool surface
     // enough resolution for a smooth trench without making a software renderer crawl
-    const NX = 120;
-    const NY = 66;
+    const NX = variant === "tile" ? 120 : 84;
+    const NY = variant === "tile" ? 66 : 46;
     const verts: number[] = [];
     const idx: number[] = [];
     for (let j = 0; j <= NY; j++) {
@@ -248,7 +265,10 @@ export default function PoolWell({ orderShare, fillPct, limitPct }: PoolWellProp
 
     let mvp = buildMVP(1);
     const resize = () => {
-      const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+      // The hero is a soft lit ground behind type, so it renders at well under one device pixel
+      // per CSS pixel and is scaled up by CSS. At full resolution it cost 83ms p95 against a
+      // 34ms budget; nothing in the image needs that density.
+      const dpr = variant === "tile" ? Math.min(1.5, window.devicePixelRatio || 1) : 0.5;
       const w = Math.max(1, Math.floor(canvas.clientWidth * dpr));
       const h = Math.max(1, Math.floor(canvas.clientHeight * dpr));
       if (canvas.width !== w || canvas.height !== h) {
@@ -266,6 +286,9 @@ export default function PoolWell({ orderShare, fillPct, limitPct }: PoolWellProp
     const started = performance.now();
     const cur = { x: 0.004, d: 0, over: 0 };
     let raf = 0;
+    // The band is chrome: it has nothing to animate once it has settled, and leaving a second
+    // WebGL loop running cost 50ms p95 on the census. It draws itself in, then stops.
+    const settlesAt = variant === "tile" ? Infinity : 2400;
 
     const frame = (now: number) => {
       const t = targetRef.current;
@@ -281,7 +304,7 @@ export default function PoolWell({ orderShare, fillPct, limitPct }: PoolWellProp
       gl.uniform1f(uOver, cur.over);
       gl.uniform1f(uTime, reduced ? 0 : (now - started) / 1000);
       gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_INT, 0);
-      raf = requestAnimationFrame(frame);
+      if (now - started < settlesAt) raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     canvas.dataset.webgl = "live";
@@ -294,21 +317,42 @@ export default function PoolWell({ orderShare, fillPct, limitPct }: PoolWellProp
       gl.deleteVertexArray(vao);
       gl.deleteProgram(prog);
     };
-  }, []);
+  }, [variant]);
+
+  const style: React.CSSProperties =
+    variant === "hero"
+      ? {
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          display: "block",
+          background: "#0B0B10",
+        }
+      : variant === "band"
+        ? {
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            display: "block",
+            background: "#0B0B10",
+          }
+        : {
+            width: "100%",
+            aspectRatio: "16 / 7",
+            display: "block",
+            borderRadius: "6px",
+            background: "#0B0B10",
+            border: "1px solid var(--border)",
+          };
 
   return (
     <canvas
       ref={hostRef}
       data-device="mark-pool-well"
-      aria-label="the live pool this order routes through, with the order carved into it"
-      style={{
-        width: "100%",
-        aspectRatio: "16 / 7",
-        display: "block",
-        borderRadius: "6px",
-        background: "#0B0B10",
-        border: "1px solid var(--border)",
-      }}
+      aria-label="the live pool this order buys from, with the bite your order takes carved into it"
+      style={style}
     />
   );
 }

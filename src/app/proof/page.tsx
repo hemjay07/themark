@@ -2,8 +2,9 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { reconcileTransaction, type TxReconciliation } from "@/lib/tx";
-import { getMintExtensions, getMultiplier, getTransferFeePercentage } from "@/lib/jupiter";
+import { getIssuerControls, getMintExtensions, getMultiplier, getTransferFeePercentage } from "@/lib/jupiter";
 import { TOKEN_LIST } from "@/lib/tokens";
+import type { IssuerControl } from "@/lib/types";
 import Odometer from "@/components/Odometer";
 
 const mono: CSSProperties = {
@@ -72,6 +73,8 @@ interface MintFinding {
   multiplier: number | null;
   // null means the read failed, which is a different fact from "no fee"
   transferFeePct: number | null;
+  // null means the extension read failed; a failed read is never shown as "no controls found"
+  controls: IssuerControl[] | null;
   loading: boolean;
 }
 
@@ -187,7 +190,7 @@ function ProofPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [findings, setFindings] = useState<MintFinding[]>(
-    TOKEN_LIST.map((t) => ({ symbol: t.symbol, mint: t.mint, multiplier: null, transferFeePct: null, loading: true }))
+    TOKEN_LIST.map((t) => ({ symbol: t.symbol, mint: t.mint, multiplier: null, transferFeePct: null, controls: null, loading: true }))
   );
 
   useEffect(() => {
@@ -234,6 +237,7 @@ function ProofPage() {
             mint: t.mint,
             multiplier: getMultiplier(ext),
             transferFeePct: getTransferFeePercentage(ext),
+            controls: getIssuerControls(ext),
             loading: false,
           };
         })
@@ -395,6 +399,56 @@ function ProofPage() {
                         ? `${f.transferFeePct.toFixed(2)}% transfer fee`
                         : "no transfer fee"}
                 </span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section style={{ marginTop: "48px", paddingTop: "32px", borderTop: "1px solid var(--border)" }}>
+          <div style={microLabel}>what the issuer can do to your money, read live off each mint</div>
+          <p style={{ ...dimText, marginTop: "10px", maxWidth: "62ch" }}>
+            Some of these mints carry extensions that give the issuer real power over what you
+            hold: the ability to move it, freeze it, or run its own code on every transfer. Read
+            here from each mint account, right now. A failed read is shown as a failed read, never
+            as a clean bill.
+          </p>
+          <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
+            {findings.map((f) => (
+              <div key={f.mint} style={{ borderBottom: "1px solid var(--border)", paddingBottom: "10px" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "10px", marginBottom: "6px" }}>
+                  <span style={{ ...mono, fontSize: "13px", color: "var(--text-primary)" }}>{f.symbol}</span>
+                  {f.loading && <span style={{ ...mono, fontSize: "12px", color: "var(--text-dim)" }}>reading…</span>}
+                  {!f.loading && f.controls === null && (
+                    <span style={{ ...mono, fontSize: "12px", color: "var(--signal)" }}>
+                      could not read this mint&apos;s issuer controls
+                    </span>
+                  )}
+                  {!f.loading && f.controls !== null && f.controls.length === 0 && (
+                    <span style={{ ...mono, fontSize: "12px", color: "var(--text-dim)" }}>
+                      none of the powers this checks for were found
+                    </span>
+                  )}
+                </div>
+                {!f.loading && f.controls !== null && f.controls.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                    {f.controls.map((c) => (
+                      <span
+                        key={c.key}
+                        title={c.meaning}
+                        style={{
+                          ...mono,
+                          fontSize: "11px",
+                          color: "var(--signal)",
+                          border: "1px solid var(--signal)",
+                          borderRadius: "3px",
+                          padding: "4px 8px",
+                        }}
+                      >
+                        {c.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

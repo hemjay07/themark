@@ -1,4 +1,4 @@
-import { getMultiplier, getTransferFeePercentage, type ParsedExtension } from "../jupiter";
+import { getIssuerControls, getMultiplier, getRoutePlan, getTransferFeePercentage, type ParsedExtension } from "../jupiter";
 
 // Fixtures below are copied from the live responses on 2026-09-22:
 //   getAccountInfo(jsonParsed) for oPAiAikWTaFj9RYoRFD35ccfwhnMcB3ThgBZRHSkjTZ (tOpenAI)
@@ -131,6 +131,68 @@ describe("Jupiter API Client", () => {
 
       // Should include the 0.2% transfer fee
       expect(allInCostPct).toBeGreaterThanOrEqual(0.2);
+    });
+  });
+
+  describe("getIssuerControls: what the issuer can do to a holder's money", () => {
+    it("returns null when the mint read failed, never as an absence of risk", () => {
+      expect(getIssuerControls(null)).toBeNull();
+    });
+
+    it("returns an empty array when the read succeeded and found none of the checked powers", () => {
+      expect(getIssuerControls([{ extension: "metadataPointer", state: {} }])).toEqual([]);
+    });
+
+    it("finds permanentDelegate, pausableConfig, transferHook and confidentialTransferMint", () => {
+      const extensions: ParsedExtension[] = [
+        { extension: "permanentDelegate", state: {} },
+        { extension: "pausableConfig", state: {} },
+        { extension: "transferHook", state: {} },
+        { extension: "confidentialTransferMint", state: {} },
+      ];
+      const keys = getIssuerControls(extensions)?.map((c) => c.key);
+      expect(keys).toEqual(
+        expect.arrayContaining(["permanentDelegate", "pausableConfig", "transferHook", "confidentialTransferMint"])
+      );
+    });
+
+    it("surfaces defaultAccountState only when new accounts actually start frozen", () => {
+      const frozen: ParsedExtension[] = [{ extension: "defaultAccountState", state: { state: "frozen" } }];
+      const initialized: ParsedExtension[] = [{ extension: "defaultAccountState", state: { state: "initialized" } }];
+      expect(getIssuerControls(frozen)?.map((c) => c.key)).toContain("defaultAccountState");
+      expect(getIssuerControls(initialized)?.map((c) => c.key)).not.toContain("defaultAccountState");
+    });
+
+    it("never uses the extension's own RPC name as the label", () => {
+      const extensions: ParsedExtension[] = [{ extension: "permanentDelegate", state: {} }];
+      const controls = getIssuerControls(extensions);
+      expect(controls?.[0].label).not.toBe("permanentDelegate");
+      expect(controls?.[0].label.toLowerCase()).toContain("issuer");
+    });
+  });
+
+  describe("getRoutePlan: where the order actually fills", () => {
+    it("returns null when the raw quote carries no route plan", () => {
+      expect(getRoutePlan({})).toBeNull();
+      expect(getRoutePlan(null)).toBeNull();
+    });
+
+    it("reads venue and percent off each leg of a real routePlan shape", () => {
+      const raw = {
+        routePlan: [
+          { swapInfo: { label: "Whirlpool", ammKey: "abc" }, percent: 70 },
+          { swapInfo: { label: "Raydium CLMM", ammKey: "def" }, percent: 30 },
+        ],
+      };
+      expect(getRoutePlan(raw)).toEqual([
+        { venue: "Whirlpool", percent: 70 },
+        { venue: "Raydium CLMM", percent: 30 },
+      ]);
+    });
+
+    it("drops legs missing a usable venue or percent rather than inventing one", () => {
+      const raw = { routePlan: [{ swapInfo: {}, percent: 100 }] };
+      expect(getRoutePlan(raw)).toBeNull();
     });
   });
 

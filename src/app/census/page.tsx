@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getQuote } from "@/lib/jupiter";
+import { getQuote, fetchPrices, getMintExtensions, rateLimitedRecently } from "@/lib/jupiter";
 import { TOKEN_LIST, USDC_MINT } from "@/lib/tokens";
 import { CENSUS_SIZES } from "@/lib/censusSizes";
 import CensusRow, { type CellState, type RowState } from "@/components/CensusRow";
+import PoolBand from "@/components/PoolBand";
 
 // 24 quotes fired strictly one after another, each of them three network calls, left the page
 // still reading after several seconds. They run through a small pool instead: fast enough to be
 // populated when a judge looks at it, small enough not to trip Jupiter's rate limit.
-const CONCURRENCY = 5;
+const CONCURRENCY = 3;
 
 export default function CensusPage() {
   const [rows, setRows] = useState<Record<string, RowState>>({});
@@ -20,32 +21,47 @@ export default function CensusPage() {
     let cancelled = false;
 
     async function run() {
-      const tasks: Array<{ mint: string; sizeKey: string; amountIn: string }> = [];
-      for (const token of TOKEN_LIST) {
-        for (const size of CENSUS_SIZES) {
-          tasks.push({ mint: token.mint, sizeKey: size.key, amountIn: size.amountIn });
-        }
-      }
+      // One price call for every token, then one mint read per token, then the three quotes.
+      // Previously each of the 24 cells refetched both, which was 72 calls and rate-limited us
+      // into "no read" across the whole page.
+      const mints = TOKEN_LIST.map((t) => t.mint);
+      const prices = await fetchPrices(mints);
+      if (cancelled) return;
 
-      let next = 0;
+      const tokens = [...TOKEN_LIST];
+      let nextToken = 0;
       const worker = async () => {
         while (!cancelled) {
-          const i = next++;
-          if (i >= tasks.length) return;
-          const task = tasks[i];
-          let cell: CellState;
-          try {
-            const q = await getQuote(USDC_MINT, task.mint, task.amountIn);
-            cell = q ? { status: "ok", quote: q } : { status: "error", message: "no live quote returned" };
-          } catch {
-            cell = { status: "error", message: "quote call failed" };
-          }
+          const ti = nextToken++;
+          if (ti >= tokens.length) return;
+          const token = tokens[ti];
+          const price = prices[token.mint];
+          const extensions = await getMintExtensions(token.mint);
           if (cancelled) return;
-          setRows((prev) => ({
-            ...prev,
-            [task.mint]: { ...prev[task.mint], [task.sizeKey]: cell },
-          }));
-          if (cell.status === "ok") setLastRead(new Date().toISOString());
+
+          for (const size of CENSUS_SIZES) {
+            if (cancelled) return;
+            let cell: CellState;
+            try {
+              const q = await getQuote(USDC_MINT, token.mint, size.amountIn, 50, { price, extensions });
+              cell = q
+                ? { status: "ok", quote: q }
+                : {
+                    status: "error",
+                    message: rateLimitedRecently()
+                      ? "Jupiter is rate-limiting this address"
+                      : "no live quote returned",
+                  };
+            } catch {
+              cell = { status: "error", message: "quote call failed" };
+            }
+            if (cancelled) return;
+            setRows((prev) => ({
+              ...prev,
+              [token.mint]: { ...prev[token.mint], [size.key]: cell },
+            }));
+            if (cell.status === "ok") setLastRead(new Date().toISOString());
+          }
         }
       };
 
@@ -124,11 +140,19 @@ export default function CensusPage() {
   // 0.31 CLS. The ranking the subhead promises is stated on its own line instead, in a slot
   // whose height is reserved from first paint.
   const rankedLine = useMemo(() => {
-    const entries = TOKEN_LIST.map((t) => ({ symbol: t.symbol, rank: rankByMint.get(t.mint) }))
-      .filter((e): e is { symbol: string; rank: number } => typeof e.rank === "number")
-      .sort((a, b) => a.rank - b.rank);
+    const largest = CENSUS_SIZES[CENSUS_SIZES.length - 1];
+    const entries = TOKEN_LIST.map((t) => {
+      const cell = rows[t.mint]?.[largest.key];
+      return cell?.status === "ok" ? { symbol: t.symbol, pct: cell.quote.fillCostPct } : null;
+    })
+      .filter((e): e is { symbol: string; pct: number } => e !== null)
+      .sort((a, b) => b.pct - a.pct);
     if (entries.length < 2) return null;
-    return entries.map((e) => e.symbol).join("  >  ");
+    // The full chain of eight wrapped to three lines at 390 and cost 0.15 CLS. The two ends
+    // are what the claim is about anyway.
+    const worst = entries[0];
+    const best = entries[entries.length - 1];
+    return `${worst.symbol} ${worst.pct.toFixed(2)}%  vs  ${best.symbol} ${best.pct.toFixed(2)}%`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
 
@@ -137,7 +161,10 @@ export default function CensusPage() {
     : null;
 
   return (
-    <main className="census-page">
+    <>
+      {/* the instrument's own material, carried here so the three surfaces read as one product */}
+      <PoolBand height={190} />
+      <main className="census-page">
       {/* Rendered via dangerouslySetInnerHTML, not as a plain text child: <style> is a raw-text
           HTML element, so the browser never decodes entities inside it. React's default text-node
           serializer HTML-escapes quote characters for SSR, which produced a real server/client
@@ -218,7 +245,7 @@ export default function CensusPage() {
       </p>
 
       <div style={{
-        minHeight: "34px",
+        minHeight: "48px",
         marginTop: "14px",
         fontFamily: '"JetBrains Mono", monospace',
         fontSize: "11.5px",
@@ -227,8 +254,8 @@ export default function CensusPage() {
         lineHeight: 1.5,
       }}>
         {rankedLine
-          ? `dearest to cheapest right now:  ${rankedLine}`
-          : "ranking appears as the reads land"}
+          ? `on a $25,000 order right now:  ${rankedLine}`
+          : "the spread appears as the reads land"}
       </div>
 
       <div className="census-status">
@@ -275,5 +302,6 @@ export default function CensusPage() {
         nothing invented in its place.
       </div>
     </main>
+    </>
   );
 }

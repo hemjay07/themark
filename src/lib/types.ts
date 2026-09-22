@@ -1,3 +1,26 @@
+// getAccountInfo(jsonParsed) returns extensions as an array of { extension, state }.
+// Verified against the live RPC for oPAiAikW... (tOpenAI) on 2026-09-22.
+export interface ParsedExtension {
+  extension: string;
+  state: Record<string, any>;
+}
+
+// A Token-2022 extension that gives the ISSUER, not the holder, power over the holder's money.
+// key is the extension name as the RPC returns it; label and meaning are plain English, read
+// once from a live mint read and never guessed.
+export interface IssuerControl {
+  key: string;
+  label: string;
+  meaning: string;
+}
+
+// One leg of the route the order actually filled through, taken straight off the quote's own
+// routePlan. percent is the share of the order that went through this venue.
+export interface RouteLeg {
+  venue: string;
+  percent: number;
+}
+
 export interface Token {
   mint: string;
   symbol: string;
@@ -51,10 +74,15 @@ export interface QuoteResult {
   multiplier: number;
   multiplierKnown: boolean;
   liquidityUsd: number;
-  transferFeePercentage?: number;
+  // null means the mint read failed, so the fee is UNKNOWN and the cost below may be understated.
+  // 0 means the mint was read and carries no fee. The two are different facts.
+  transferFeePercentage: number | null;
   swapTransaction?: string; // base64
   // the untouched Jupiter quote response; /swap/v1/swap requires it verbatim
   raw: unknown;
+  // the output mint's Token-2022 extensions, already read by getQuote to work out the
+  // transfer fee. null means the read failed, not that the mint carries none.
+  extensions: ParsedExtension[] | null;
 }
 
 export interface Receipt {
@@ -70,7 +98,7 @@ export interface Receipt {
   timestamp: string;
   tokenSymbol: string;
   multiplier: number;
-  transferFeePercentage?: number;
+  transferFeePercentage?: number | null;
 }
 
 export interface WalletContextType {

@@ -1,15 +1,10 @@
-import type { Price, QuoteResult } from "./types";
+import type { IssuerControl, ParsedExtension, Price, QuoteResult, RouteLeg } from "./types";
 import { USDC_MINT, getToken } from "./tokens";
+
+export type { ParsedExtension } from "./types";
 
 const JUPITER_BASE_URL = "https://lite-api.jup.ag";
 const JUPITER_QUOTE_URL = "https://lite-api.jup.ag/swap/v1"; // quote-api.jup.ag does not resolve; verified 2026-09-22
-
-// getAccountInfo(jsonParsed) returns extensions as an array of { extension, state }.
-// Verified against the live RPC for oPAiAikW... (tOpenAI) on 2026-09-22.
-export interface ParsedExtension {
-  extension: string;
-  state: Record<string, any>;
-}
 
 // Reads the mint's Token-2022 extensions through this app's own route, because the public
 // RPC refuses browser-origin requests with 403.
@@ -65,14 +60,101 @@ export function getTransferFeePercentage(extensions: ParsedExtension[] | null): 
   return typeof bps === "number" ? bps / 100 : 0;
 }
 
+// The Token-2022 extensions that hand the ISSUER power over a holder's money, not the holder.
+// Each entry names the RPC's extension key, a short label, and what it means in plain English
+// for the person's money — never the extension name itself (indexer vocabulary is not a label).
+// Presence of the extension IS the fact worth showing; a holder cannot tell any of this from the
+// price feed or from holding the token.
+const ISSUER_CONTROL_DEFS: Array<{ key: string; label: string; meaning: string }> = [
+  {
+    key: "permanentDelegate",
+    label: "the issuer can move your tokens",
+    meaning: "a permanent delegate is set on this mint, so the issuer can move or seize your tokens out of your wallet without asking you.",
+  },
+  {
+    key: "pausableConfig",
+    label: "the issuer can halt trading",
+    meaning: "trading in this token can be paused by the issuer at any time, for everyone, with no warning to you.",
+  },
+  {
+    key: "transferHook",
+    label: "custom code runs on every transfer",
+    meaning: "code the issuer controls runs every time this token moves, and it can block or alter the transfer.",
+  },
+  {
+    key: "confidentialTransferMint",
+    label: "transfer amounts can be hidden",
+    meaning: "this mint supports hiding transfer amounts, so what actually moved is not always visible on-chain.",
+  },
+];
+
+// defaultAccountState is only a real risk to a holder when new accounts start FROZEN; a mint
+// that defaults to initialized carries the extension but grants the issuer nothing extra here.
+// The RPC's jsonParsed state has been seen as either a lowercase string or a numeric enum
+// (Token-2022: 0 uninitialized, 1 initialized, 2 frozen), so both are read.
+function defaultAccountStartsFrozen(state: Record<string, any> | undefined): boolean {
+  if (!state) return false;
+  const raw = state.accountState ?? state.state;
+  if (typeof raw === "string") return raw.toLowerCase() === "frozen";
+  if (typeof raw === "number") return raw === 2;
+  return false;
+}
+
+// Reads which of the issuer-power extensions are actually present on this mint, right now.
+// Returns null when the read failed — a failed read must never be shown as "no risks found"
+// (charter ban 1). Returns [] when the read succeeded and genuinely found none.
+export function getIssuerControls(extensions: ParsedExtension[] | null): IssuerControl[] | null {
+  if (!extensions) return null;
+  const found: IssuerControl[] = [];
+  for (const def of ISSUER_CONTROL_DEFS) {
+    if (extensions.some((e) => e.extension === def.key)) {
+      found.push(def);
+    }
+  }
+  const defaultState = extensions.find((e) => e.extension === "defaultAccountState");
+  if (defaultState && defaultAccountStartsFrozen(defaultState.state)) {
+    found.push({
+      key: "defaultAccountState",
+      label: "new accounts start frozen",
+      meaning: "a wallet that has never held this token starts frozen and the issuer must thaw it before you can use what you receive.",
+    });
+  }
+  return found;
+}
+
+// The route the order actually fills through, off the quote's own routePlan — already fetched
+// for every quote and never shown. Returns null when the raw quote carries no readable plan.
+export function getRoutePlan(raw: unknown): RouteLeg[] | null {
+  const plan = (raw as any)?.routePlan;
+  if (!Array.isArray(plan) || plan.length === 0) return null;
+  const legs: RouteLeg[] = [];
+  for (const step of plan) {
+    const venue = step?.swapInfo?.label;
+    const percent = step?.percent;
+    if (typeof venue === "string" && Number.isFinite(percent)) {
+      legs.push({ venue, percent });
+    }
+  }
+  return legs.length > 0 ? legs : null;
+}
+
 // Jupiter's public endpoint rate-limits. A 429 is not an answer, so the call is retried with
 // backoff rather than being treated as "no data"; a number is still only ever shown when a call
 // in this moment returned it.
+// When the public endpoint throttles us, the surface must say THAT rather than "no read",
+// which reads as a broken product. This records the moment it last happened so the UI can
+// name the real reason. It stores a timestamp, never a price.
+let lastRateLimitedAt = 0;
+export function rateLimitedRecently(withinMs = 20000): boolean {
+  return lastRateLimitedAt > 0 && Date.now() - lastRateLimitedAt < withinMs;
+}
+
 async function fetchWithRetry(url: string, tries = 3): Promise<Response | null> {
   for (let i = 0; i < tries; i++) {
     try {
       const res = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
       if (res.ok) return res;
+      if (res.status === 429) lastRateLimitedAt = Date.now();
       if (res.status !== 429 && res.status < 500) return null;
     } catch {
       // network error: fall through to the backoff
@@ -101,11 +183,20 @@ export async function fetchPrices(mints: string[]): Promise<Record<string, Price
   }
 }
 
+// Pre-fetched reads shared across several quotes for the same mint. The census asks for three
+// order sizes per token and was refetching that token's price and mint extensions for each one,
+// so eight tokens cost 72 HTTP calls and rate-limited us into "no read" across the whole page.
+export interface QuoteContext {
+  price?: Price;
+  extensions?: ParsedExtension[] | null;
+}
+
 export async function getQuote(
   inputMint: string,
   outputMint: string,
   amountIn: string,
-  slippageBps: number = 50
+  slippageBps: number = 50,
+  ctx?: QuoteContext
 ): Promise<QuoteResult | null> {
   const params = new URLSearchParams({
     inputMint,
@@ -125,9 +216,12 @@ export async function getQuote(
 
     const quoteData = await res.json();
 
-    // Fetch prices to get reference price
-    const prices = await fetchPrices([outputMint]);
-    const price = prices[outputMint];
+    // Fetch prices to get reference price, unless the caller already read it this pass
+    let price = ctx?.price;
+    if (!price) {
+      const prices = await fetchPrices([outputMint]);
+      price = prices[outputMint];
+    }
 
     if (!price) {
       console.error("Could not fetch price for reference");
@@ -135,14 +229,15 @@ export async function getQuote(
     }
 
     // The multiplier comes from the price response itself; the transfer fee needs the mint account.
-    const extensions = await getMintExtensions(outputMint);
-    const readFee = getTransferFeePercentage(extensions);
-    if (readFee === null) {
-      // A mint whose fee could not be read would silently drop a real 20 bps out of the cost.
-      console.error("Mint extensions unavailable; refusing to quote a cost that may omit a fee.");
-      return null;
-    }
-    const transferFeePercentage = readFee;
+    const extensions =
+      ctx && Object.prototype.hasOwnProperty.call(ctx, "extensions")
+        ? ctx.extensions ?? null
+        : await getMintExtensions(outputMint);
+    // A mint read that fails must not silently drop a real 20 bps out of the cost, but it must
+    // not kill the quote either: the public RPC rate-limits constantly, and refusing every quote
+    // made the product unusable and printed "no read" across the whole census. The fee is carried
+    // as unknown instead, and the surface says so.
+    const transferFeePercentage = getTransferFeePercentage(extensions);
     const onChainMultiplier = getMultiplier(extensions);
     const feedCfg = price.scaledUiConfig;
     const feedEffectiveAt = feedCfg?.newMultiplierEffectiveAt
@@ -186,7 +281,7 @@ export async function getQuote(
     let allInCostUsd = amountInUsd - shareValueUsd;
 
     // Add transfer fee to all-in cost if present
-    if (transferFeePercentage > 0) {
+    if (transferFeePercentage !== null && transferFeePercentage > 0) {
       const transferFeeAmount = (amountInUsd * transferFeePercentage) / 100;
       allInCostUsd += transferFeeAmount;
     }
@@ -204,7 +299,7 @@ export async function getQuote(
       return null;
     }
     const impactPct = Math.abs(rawImpact) * 100;
-    const fillCostPct = impactPct + transferFeePercentage;
+    const fillCostPct = impactPct + (transferFeePercentage ?? 0);
     const fillCostUsd = (amountInUsd * fillCostPct) / 100;
 
     return {
@@ -227,7 +322,8 @@ export async function getQuote(
       multiplierKnown,
       liquidityUsd: price.liquidity,
       raw: quoteData,
-      transferFeePercentage: transferFeePercentage > 0 ? transferFeePercentage : undefined,
+      transferFeePercentage,
+      extensions,
     };
   } catch (err) {
     console.error("Quote fetch failed:", err);
