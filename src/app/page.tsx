@@ -211,7 +211,56 @@ export default function Home() {
   const isBelow = netPercent < 0;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", padding: "20px" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "20px" }}>
+      {/* The fold says what this is before it shows the instrument. A stranger arriving here
+          should know the product and the claim in three seconds, without reading a number. */}
+      <header style={{ width: "100%", maxWidth: "720px", padding: "48px 4px 36px" }}>
+        <h1 style={{
+          fontFamily: '"Archivo", sans-serif',
+          fontSize: "clamp(28px, 5.2vw, 46px)",
+          lineHeight: 1.08,
+          letterSpacing: "-0.02em",
+          fontWeight: 400,
+          color: "var(--text-primary)",
+          margin: "0 0 18px",
+        }}>
+          You are about to buy a stock that is not priced like the stock.
+        </h1>
+        <p style={{
+          fontFamily: '"Archivo", sans-serif',
+          fontSize: "clamp(14px, 2vw, 17px)",
+          lineHeight: 1.55,
+          color: "var(--text-muted)",
+          margin: "0 0 20px",
+          maxWidth: "58ch",
+        }}>
+          THE MARK reads the pool your order actually routes into, shows what the fill costs you in
+          percent and in dollars against the price of the real share, and then signs or refuses at a
+          line you set. Nothing here is stored or remembered: every figure is read the moment you
+          look at it.
+        </p>
+        <div style={{
+          display: "flex",
+          gap: "10px",
+          flexWrap: "wrap",
+          fontFamily: '"JetBrains Mono", monospace',
+          fontSize: "11px",
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "var(--text-dim)",
+        }}>
+          <span style={{ border: "1px solid var(--border)", borderRadius: "3px", padding: "5px 9px" }}>
+            live from Jupiter
+          </span>
+          <span style={{ border: "1px solid var(--border)", borderRadius: "3px", padding: "5px 9px" }}>
+            Token-2022 multiplier and fee read on chain
+          </span>
+          <span style={{ border: "1px solid var(--border)", borderRadius: "3px", padding: "5px 9px" }}>
+            no cached prices
+          </span>
+        </div>
+      </header>
+
       <main style={{
         width: "100%",
         maxWidth: "580px",
@@ -220,6 +269,44 @@ export default function Home() {
         borderRadius: "8px",
         padding: "32px",
       }}>
+
+        {/* Which stock. Without this the product quotes one token forever. */}
+        <div style={{ marginBottom: "24px" }}>
+          <div style={{
+            fontSize: "11px",
+            color: "var(--text-dim)",
+            textTransform: "uppercase",
+            letterSpacing: "0.12em",
+            marginBottom: "10px",
+            fontFamily: '"JetBrains Mono", monospace',
+          }}>Which stock are you buying</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+            {TOKEN_LIST.map((t) => {
+              const active = t.symbol === selectedToken;
+              return (
+                <button
+                  key={t.mint}
+                  onClick={() => setSelectedToken(t.symbol)}
+                  aria-pressed={active}
+                  title={t.name}
+                  style={{
+                    fontFamily: '"JetBrains Mono", monospace',
+                    fontSize: "12px",
+                    padding: "7px 11px",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    background: active ? "var(--text-primary)" : "transparent",
+                    color: active ? "var(--bg)" : "var(--text-muted)",
+                    border: `1px solid ${active ? "var(--text-primary)" : "var(--border)"}`,
+                    transition: "background 120ms ease-out, color 120ms ease-out",
+                  }}
+                >
+                  {t.symbol}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {/* The device: the pool this order routes through, with the order carved into it.
             Its trench depth is the impact the router returned for this exact amount. */}
@@ -260,9 +347,9 @@ export default function Home() {
           )}
         </div>
 
-        {/* Headline */}
-        <h1 style={{
-          fontSize: "14px",
+        {/* The reading, in one sentence */}
+        <p style={{
+          fontSize: "15px",
           fontWeight: "400",
           marginBottom: "32px",
           marginTop: "0",
@@ -273,17 +360,8 @@ export default function Home() {
         } as any}>
           You end up <span style={{ color: isBelow ? "var(--success)" : "var(--signal)" }}>
             <Odometer value={Math.abs(netPercent)} />
-          </span>% {isBelow ? "below" : "above"} the share
-        </h1>
-        <style>
-          {`
-            @media (max-width: 600px) {
-              h1 {
-                font-size: 13px !important;
-              }
-            }
-          `}
-        </style>
+          </span>% {isBelow ? "below" : "above"} the share on {selectedToken}
+        </p>
 
         {/* Amount Input */}
         <div style={{ marginBottom: "32px" }}>
@@ -548,6 +626,80 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {/* The rest of the product, said plainly, so a reader knows there are two more surfaces. */}
+      <section style={{ width: "100%", maxWidth: "720px", padding: "44px 4px 64px" }}>
+        <div style={{
+          fontFamily: '"JetBrains Mono", monospace',
+          fontSize: "11px",
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color: "var(--text-dim)",
+          marginBottom: "16px",
+        }}>
+          Two more surfaces
+        </div>
+        <div style={{ display: "grid", gap: "12px", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+          <a
+            href="/census"
+            style={{
+              display: "block",
+              padding: "18px",
+              border: "1px solid var(--border)",
+              borderRadius: "6px",
+              textDecoration: "none",
+              background: "var(--surface)",
+            }}
+          >
+            <div style={{
+              fontFamily: '"Archivo", sans-serif',
+              fontSize: "17px",
+              color: "var(--text-primary)",
+              marginBottom: "8px",
+            }}>
+              The census
+            </div>
+            <div style={{
+              fontFamily: '"Archivo", sans-serif',
+              fontSize: "14px",
+              lineHeight: 1.5,
+              color: "var(--text-muted)",
+            }}>
+              Every tokenized stock measured at three order sizes at once, live, on one shared scale.
+              It is where the claim above stops being an opinion.
+            </div>
+          </a>
+          <a
+            href="/proof"
+            style={{
+              display: "block",
+              padding: "18px",
+              border: "1px solid var(--border)",
+              borderRadius: "6px",
+              textDecoration: "none",
+              background: "var(--surface)",
+            }}
+          >
+            <div style={{
+              fontFamily: '"Archivo", sans-serif',
+              fontSize: "17px",
+              color: "var(--text-primary)",
+              marginBottom: "8px",
+            }}>
+              The proof
+            </div>
+            <div style={{
+              fontFamily: '"Archivo", sans-serif',
+              fontSize: "14px",
+              lineHeight: 1.5,
+              color: "var(--text-muted)",
+            }}>
+              Paste a signature and it reads that transaction off the chain and reconciles it against
+              what this screen promised before it was signed.
+            </div>
+          </a>
+        </div>
+      </section>
     </div>
   );
 }
