@@ -11,6 +11,13 @@ import PoolBand from "@/components/PoolBand";
 // still reading after several seconds. They run through a small pool instead: fast enough to be
 // populated when a judge looks at it, small enough not to trip Jupiter's rate limit.
 const CONCURRENCY = 3;
+const ROW_SLOT = 160;
+
+// "Intel xStock" -> "Intel", "T-OpenAI" -> "OpenAI": the headline names companies, not tickers.
+const plainName = (symbol: string) => {
+  const t = TOKEN_LIST.find((x) => x.symbol === symbol);
+  return (t?.name ?? symbol).replace(/ xStock$/, "").replace(/^T-/, "").replace(/^SP500$/, "the S&P 500");
+};
 
 export default function CensusPage() {
   const [rows, setRows] = useState<Record<string, RowState>>({});
@@ -136,25 +143,16 @@ export default function CensusPage() {
     return map;
   }, [rows]);
 
-  // The rows stay in a fixed order on purpose: reordering 24 async rows as they land cost
-  // 0.31 CLS. The ranking the subhead promises is stated on its own line instead, in a slot
-  // whose height is reserved from first paint.
-  const rankedLine = useMemo(() => {
-    const largest = CENSUS_SIZES[CENSUS_SIZES.length - 1];
-    const entries = TOKEN_LIST.map((t) => {
-      const cell = rows[t.mint]?.[largest.key];
-      return cell?.status === "ok" ? { symbol: t.symbol, pct: cell.quote.fillCostPct } : null;
-    })
-      .filter((e): e is { symbol: string; pct: number } => e !== null)
-      .sort((a, b) => b.pct - a.pct);
-    if (entries.length < 2) return null;
-    // The full chain of eight wrapped to three lines at 390 and cost 0.15 CLS. The two ends
-    // are what the claim is about anyway.
-    const worst = entries[0];
-    const best = entries[entries.length - 1];
-    return `${worst.symbol} ${worst.pct.toFixed(2)}%  vs  ${best.symbol} ${best.pct.toFixed(2)}%`;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows]);
+  // worst first, then the tokens still reading, in list order
+  const slotByMint = useMemo(() => {
+    const ranked = TOKEN_LIST.filter((t) => rankByMint.has(t.mint)).sort(
+      (a, b) => (rankByMint.get(a.mint) ?? 0) - (rankByMint.get(b.mint) ?? 0)
+    );
+    const rest = TOKEN_LIST.filter((t) => !rankByMint.has(t.mint));
+    return new Map([...ranked, ...rest].map((t, i) => [t.mint, i]));
+  }, [rankByMint]);
+
+
 
   const readAt = lastRead
     ? new Date(lastRead).toLocaleTimeString(undefined, { hour12: false })
@@ -174,7 +172,7 @@ export default function CensusPage() {
         .census-page{max-width:960px;margin:0 auto;padding:48px 24px 88px}
         .census-kicker{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.16em;
           text-transform:uppercase;color:var(--text-dim);margin-bottom:18px}
-        .census-headline{font-family:Archivo,sans-serif;font-weight:400;font-size:32px;line-height:1.12;
+        .census-headline{min-height:2.3em;font-family:Archivo,sans-serif;font-weight:400;font-size:32px;line-height:1.12;
           letter-spacing:-0.01em;color:var(--text-primary);margin:0 0 16px;max-width:22ch}
         .census-sub{font-size:14px;line-height:1.6;color:var(--text-muted);max-width:56ch;margin:0 0 24px}
         .census-status{display:flex;align-items:center;gap:8px;font-family:"JetBrains Mono",monospace;
@@ -225,7 +223,7 @@ export default function CensusPage() {
           font-family:"JetBrains Mono",monospace;font-size:11px;line-height:1.7;color:var(--text-dim)}
         @media (max-width:600px){
           .census-page{padding:32px 16px 72px}
-          .census-headline{font-size:22px;max-width:none}
+          .census-headline{font-size:22px;max-width:none;min-height:4.6em}
           .cr-name{display:none}
           .fb-label{flex:0 0 48px;font-size:10px}
           .fb-value{flex:0 0 54px;font-size:12px}
@@ -233,30 +231,17 @@ export default function CensusPage() {
       ` }} />
 
       <div className="census-kicker">The Mark · Census</div>
-      <h1 className="census-headline">the gap is the same for everyone. the fill is not.</h1>
-      <p className="census-sub">
-        every tokenized stock measured at three order sizes, live, ranked by what the fill actually
-        costs.{" "}
+      <h1 className="census-headline">
         {spread
-          ? `right now the worst pool charges ${spread.multiple} what the best one does on a ${spread.size} order: ${spread.worstSymbol} at ${spread.worstPct}% against ${spread.bestSymbol} at ${spread.bestPct}%.`
-          : "the spread between the best and worst pool is computed from the rows below as they land."}{" "}
-        the token-vs-share gap, which most of this field charts, measured a median 0.20% across 20
-        pairs on 2026-09-22.
+          ? `On the same ${spread.size} order, ${plainName(spread.worstSymbol)} costs ${spread.multiple} what ${plainName(spread.bestSymbol)} does.`
+          : "The same order costs very different amounts depending on the stock."}
+      </h1>
+      <p className="census-sub">
+        Every tokenized stock, priced live at three order sizes, worst first. The gap between token and
+        share that most of this field charts measured a median 0.20% across 20 pairs on 2026-09-22.
       </p>
 
-      <div style={{
-        minHeight: "48px",
-        marginTop: "14px",
-        fontFamily: '"JetBrains Mono", monospace',
-        fontSize: "11.5px",
-        letterSpacing: "0.06em",
-        color: "var(--text-dim)",
-        lineHeight: 1.5,
-      }}>
-        {rankedLine
-          ? `on a $25,000 order right now:  ${rankedLine}`
-          : "the spread appears as the reads land"}
-      </div>
+
 
       <div className="census-status">
         <span className="census-dot" data-done={done} />
@@ -283,16 +268,36 @@ export default function CensusPage() {
       {/* the thing that could only exist for this product: every token in the list, at three
           order sizes, on one shared cost scale, read live. row position is fixed; only the
           numbers and the printed rank move. */}
-      <div className="census-list" data-device="fill-cost-census">
+      {/* Rows sit in fixed 160px slots and move to their rank with a transform. Re-sorting them in the
+          DOM as reads landed cost 0.31 CLS; a transform moves the paint, not the layout, so the page
+          never shifts while the worst pool slides to the top where the finding belongs. */}
+      <div
+        className="census-list"
+        data-device="fill-cost-census"
+        style={{ position: "relative", height: `${TOKEN_LIST.length * ROW_SLOT}px` }}
+      >
         {TOKEN_LIST.map((token) => (
-          <CensusRow
+          <div
             key={token.mint}
-            rank={rankByMint.get(token.mint) ?? null}
-            token={token}
-            row={rows[token.mint]}
-            sizes={CENSUS_SIZES}
-            scaleMax={scaleMax}
-          />
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: `${ROW_SLOT}px`,
+              overflow: "hidden",
+              transform: `translateY(${(slotByMint.get(token.mint) ?? 0) * ROW_SLOT}px)`,
+              transition: "transform 420ms cubic-bezier(0.23, 1, 0.32, 1)",
+            }}
+          >
+            <CensusRow
+              rank={rankByMint.get(token.mint) ?? null}
+              token={token}
+              row={rows[token.mint]}
+              sizes={CENSUS_SIZES}
+              scaleMax={scaleMax}
+            />
+          </div>
         ))}
       </div>
 

@@ -3,7 +3,6 @@ import { USDC_MINT, getToken } from "./tokens";
 
 export type { ParsedExtension } from "./types";
 
-const JUPITER_QUOTE_URL = "https://lite-api.jup.ag/swap/v1"; // quote-api.jup.ag does not resolve; verified 2026-09-22
 
 // Reads the mint's Token-2022 extensions through this app's own route, because the public
 // RPC refuses browser-origin requests with 403.
@@ -336,7 +335,7 @@ export async function getSwapTransaction(
   walletPublicKey: string
 ): Promise<string | null> {
   try {
-    const res = await fetch(`${JUPITER_QUOTE_URL}/swap`, {
+    const res = await fetch(`/api/jup?path=/swap/v1/swap`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
