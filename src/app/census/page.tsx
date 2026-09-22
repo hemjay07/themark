@@ -120,6 +120,18 @@ export default function CensusPage() {
     return map;
   }, [rows]);
 
+  // The rows stay in a fixed order on purpose: reordering 24 async rows as they land cost
+  // 0.31 CLS. The ranking the subhead promises is stated on its own line instead, in a slot
+  // whose height is reserved from first paint.
+  const rankedLine = useMemo(() => {
+    const entries = TOKEN_LIST.map((t) => ({ symbol: t.symbol, rank: rankByMint.get(t.mint) }))
+      .filter((e): e is { symbol: string; rank: number } => typeof e.rank === "number")
+      .sort((a, b) => a.rank - b.rank);
+    if (entries.length < 2) return null;
+    return entries.map((e) => e.symbol).join("  >  ");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
+
   const readAt = lastRead
     ? new Date(lastRead).toLocaleTimeString(undefined, { hour12: false })
     : null;
@@ -204,6 +216,20 @@ export default function CensusPage() {
         the token-vs-share gap, which most of this field charts, measured a median 0.20% across 20
         pairs on 2026-09-22.
       </p>
+
+      <div style={{
+        minHeight: "34px",
+        marginTop: "14px",
+        fontFamily: '"JetBrains Mono", monospace',
+        fontSize: "11.5px",
+        letterSpacing: "0.06em",
+        color: "var(--text-dim)",
+        lineHeight: 1.5,
+      }}>
+        {rankedLine
+          ? `dearest to cheapest right now:  ${rankedLine}`
+          : "ranking appears as the reads land"}
+      </div>
 
       <div className="census-status">
         <span className="census-dot" data-done={done} />

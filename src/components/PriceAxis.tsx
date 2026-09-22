@@ -26,7 +26,7 @@ export default function PriceAxis({
   // Text numbers travel without going through React state; only the bar geometry,
   // which must re-lay-out, stays on state.
   const money = useCallback((n: number) => `$${n.toFixed(2)}`, []);
-  const pctFill = useCallback((n: number) => `the trade itself costs ${n.toFixed(2)}%`, []);
+  const pctFill = useCallback((n: number) => `${n.toFixed(2)}% of your order`, []);
   const limitText = useCallback((n: number) => `your limit ${n.toFixed(2)}%`, []);
   const tokenRef = useOdometerRef<SVGTextElement>(tokenPrice, money);
   const shareRef = useOdometerRef<SVGTextElement>(sharePrice, money);
@@ -34,7 +34,7 @@ export default function PriceAxis({
   const limitRef = useOdometerRef<SVGTextElement>(limitPct, limitText);
   const costRef = useOdometerRef<SVGTextElement>(
     (amount * fillPercent) / 100,
-    useCallback((n: number) => `$${n.toFixed(2)} extra on $${amount.toFixed(0)}`, [amount])
+    useCallback(() => "", [])
   );
   const shownFill = useCountUp(fillPercent);
 
@@ -101,13 +101,13 @@ export default function PriceAxis({
 
         {/* The two prices sit at fixed ends of the header so they never collide, whatever the
             basis gap does. The ticks below them carry the position. */}
-        <text ref={tokenRef} x="120" y="64" textAnchor="start" fontSize="58" fill="#FAFAFA" fontFamily="JetBrains Mono" />
-        <text x="120" y="106" textAnchor="start" fontSize="24" fill="#71717A" fontFamily="Archivo" letterSpacing="0.14em">
+        <text ref={tokenRef} x="120" y="52" textAnchor="start" fontSize="34" fill="#FAFAFA" fontFamily="JetBrains Mono" />
+        <text x="120" y="86" textAnchor="start" fontSize="20" fill="#71717A" fontFamily="Archivo" letterSpacing="0.14em">
           YOU PAY PER SHARE
         </text>
 
-        <text ref={shareRef} x="900" y="64" textAnchor="end" fontSize="58" fill="#FAFAFA" fontFamily="JetBrains Mono" />
-        <text x="900" y="106" textAnchor="end" fontSize="24" fill="#71717A" fontFamily="Archivo" letterSpacing="0.14em">
+        <text ref={shareRef} x="900" y="52" textAnchor="end" fontSize="34" fill="#FAFAFA" fontFamily="JetBrains Mono" />
+        <text x="900" y="86" textAnchor="end" fontSize="20" fill="#71717A" fontFamily="Archivo" letterSpacing="0.14em">
           REAL SHARE PRICE
         </text>
 

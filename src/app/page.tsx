@@ -11,8 +11,8 @@ import PoolWell from "@/components/PoolWell";
 import Odometer from "@/components/Odometer";
 
 export default function Home() {
-  const [amount, setAmount] = useState("500");
-  const [selectedToken, setSelectedToken] = useState("PLTRx");
+  const [amount, setAmount] = useState("5000");
+  const [selectedToken, setSelectedToken] = useState("INTCx");
   const [quote, setQuote] = useState<QuoteResult | null>(null);
   const [receipt, setReceipt] = useState<ReceiptType | null>(null);
   const [worstFillPct, setWorstFillPct] = useState(0.5);
@@ -22,6 +22,7 @@ export default function Home() {
   const [initialized, setInitialized] = useState(false);
   const [signing, setSigning] = useState(false);
   const [settling, setSettling] = useState(false);
+  const [costByToken, setCostByToken] = useState<Record<string, number | null>>({});
 
   useEffect(() => {
     const checkConnection = async () => {
@@ -107,7 +108,7 @@ export default function Home() {
   const limitIsSet = Number.isFinite(worstFillPct);
   const effectiveLimit = limitIsSet ? worstFillPct : 0;
   const shouldRefuse = Boolean(quote && quote.fillCostPct > effectiveLimit);
-  const amountNum = parseFloat(amount) || 500;
+  const amountNum = parseFloat(amount) || 5000;
   const fillPercent = ((amountNum - 10) / (25000 - 10)) * 100;
 
   const handleSign = async () => {
@@ -186,6 +187,44 @@ export default function Home() {
       setSettling(false);
     }
   };
+
+  // Every stock priced at the amount you typed, so the selector itself shows the spread.
+  // This is the whole claim in one row: the same order costs wildly different amounts
+  // depending only on which pool it lands in.
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const amt = parseFloat(amount);
+      if (!amt || amt < 10 || amt > 25000) return;
+      const lamports = String(Math.floor(amt * 1e6));
+      const limit = Number.isFinite(worstFillPct) ? worstFillPct : 0;
+      const bps = Math.max(1, Math.min(5000, Math.round(limit * 100)));
+
+      const tasks = [...TOKEN_LIST];
+      let next = 0;
+      const worker = async () => {
+        while (!cancelled) {
+          const i = next++;
+          if (i >= tasks.length) return;
+          const t = tasks[i];
+          try {
+            const q = await getQuote(USDC_MINT, t.mint, lamports, bps);
+            if (!cancelled) {
+              setCostByToken((prev) => ({ ...prev, [t.symbol]: q ? q.fillCostPct : null }));
+            }
+          } catch {
+            if (!cancelled) setCostByToken((prev) => ({ ...prev, [t.symbol]: null }));
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: 4 }, worker));
+    };
+    const timer = setTimeout(run, 700);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [amount, worstFillPct]);
 
   const handleConnect = async () => {
     const phantom = (window as any)?.solana;
@@ -294,6 +333,7 @@ export default function Home() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
             {TOKEN_LIST.map((t) => {
               const active = t.symbol === selectedToken;
+              const cost = costByToken[t.symbol];
               return (
                 <button
                   key={t.mint}
@@ -312,7 +352,22 @@ export default function Home() {
                     transition: "background 120ms ease-out, color 120ms ease-out",
                   }}
                 >
-                  {t.symbol}
+                  <span>{t.symbol}</span>
+                  <span style={{
+                    display: "block",
+                    fontSize: "10px",
+                    marginTop: "3px",
+                    opacity: 0.85,
+                    color: active
+                      ? "var(--bg)"
+                      : cost === null || cost === undefined
+                        ? "var(--text-dim)"
+                        : cost > 1
+                          ? "var(--signal)"
+                          : "var(--text-dim)",
+                  }}>
+                    {cost === undefined ? "…" : cost === null ? "no read" : `${cost.toFixed(2)}%`}
+                  </span>
                 </button>
               );
             })}
@@ -341,6 +396,42 @@ export default function Home() {
                   quote.routeLegs > 1 ? `, spread across ${quote.routeLegs} places` : ""
                 }. the red gouge is the bite your order takes out of it.`
               : "reading what is available to buy right now"}
+          </div>
+        </div>
+
+        {/* The number this surface exists to say, at the size that says it. It used to be
+            11px red mono under a pair of 30px prices whose difference was the actual point. */}
+        <div style={{ margin: "26px 0 6px", minHeight: "118px" }}>
+          <div style={{
+            fontSize: "11px",
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "var(--text-dim)",
+            fontFamily: '"JetBrains Mono", monospace',
+            marginBottom: "6px",
+          }}>
+            What this order costs you
+          </div>
+          <div style={{
+            fontFamily: '"JetBrains Mono", monospace',
+            fontSize: "clamp(40px, 9vw, 68px)",
+            lineHeight: 1,
+            letterSpacing: "-0.02em",
+            color: shouldRefuse ? "var(--signal)" : "var(--text-primary)",
+            fontVariantNumeric: "tabular-nums",
+          }}>
+            {quote ? <Odometer value={quote.fillCostUsd} prefix="$" /> : "$—"}
+          </div>
+          <div style={{
+            fontFamily: '"Archivo", sans-serif',
+            fontSize: "14px",
+            color: "var(--text-muted)",
+            marginTop: "10px",
+            lineHeight: 1.5,
+          }}>
+            {quote
+              ? `extra on your $${amountNum.toFixed(0)}, which is ${quote.fillCostPct.toFixed(2)}% of what you spend`
+              : "reading the pool right now"}
           </div>
         </div>
 
@@ -420,6 +511,7 @@ export default function Home() {
                 borderRadius: "2px",
                 outline: "none",
                 appearance: "none",
+                accentColor: "#C4261D",
                 background: `linear-gradient(to right, var(--signal) 0%, var(--signal) ${fillPercent}%, var(--border) ${fillPercent}%, var(--border) 100%)`,
               } as any}
             />
