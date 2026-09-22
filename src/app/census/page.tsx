@@ -45,12 +45,14 @@ export default function CensusPage() {
     };
   }, []);
 
+  // fillCostPct (price impact plus transfer fee) is the fill's own cost, never negative.
+  // allInCostPct nets off the basis and can go negative, which is wrong for a cost bar.
   const scaleMax = useMemo(() => {
     const pcts: number[] = [];
     for (const row of Object.values(rows)) {
       for (const size of CENSUS_SIZES) {
         const cell = row?.[size.key];
-        if (cell?.status === "ok") pcts.push(cell.quote.allInCostPct);
+        if (cell?.status === "ok") pcts.push(cell.quote.fillCostPct);
       }
     }
     if (!pcts.length) return 1;
@@ -67,7 +69,7 @@ export default function CensusPage() {
       let max: number | null = null;
       for (const size of CENSUS_SIZES) {
         const cell = row[size.key];
-        if (cell?.status === "ok") max = Math.max(max ?? -Infinity, cell.quote.allInCostPct);
+        if (cell?.status === "ok") max = Math.max(max ?? -Infinity, cell.quote.fillCostPct);
       }
       return max;
     };
@@ -85,7 +87,12 @@ export default function CensusPage() {
 
   return (
     <main className="census-page">
-      <style>{`
+      {/* Rendered via dangerouslySetInnerHTML, not as a plain text child: <style> is a raw-text
+          HTML element, so the browser never decodes entities inside it. React's default text-node
+          serializer HTML-escapes quote characters for SSR, which produced a real server/client
+          text mismatch here (the font-family strings contain literal double quotes) and was the
+          source of the React #425 hydration error. dangerouslySetInnerHTML skips that escaping. */}
+      <style dangerouslySetInnerHTML={{ __html: `
         .census-page{max-width:960px;margin:0 auto;padding:48px 24px 88px}
         .census-kicker{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.16em;
           text-transform:uppercase;color:var(--text-dim);margin-bottom:18px}
@@ -95,14 +102,19 @@ export default function CensusPage() {
         .census-status{display:flex;align-items:center;gap:8px;font-family:"JetBrains Mono",monospace;
           font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);
           margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .census-dot{width:6px;height:6px;border-radius:50%;background:var(--success);flex:0 0 6px;
-          animation:census-pulse 1400ms ease-in-out infinite}
-        .census-dot[data-done="true"]{animation:none;opacity:1}
-        .census-all{opacity:0;transition:opacity 180ms ease-out}
-        .census-all[data-visible="true"]{opacity:1}
+        .census-dot{width:6px;height:6px;border-radius:50%;background:var(--success);flex:0 0 6px}
+        .census-dot[data-done="true"]{opacity:1}
+        /* Reserves its own space at all times (visibility:hidden keeps the box, drops it from the
+           a11y tree) rather than opacity, which would still be read by a screen reader while unseen. */
+        .census-all{visibility:hidden}
+        .census-all[data-visible="true"]{visibility:visible}
+        @media (prefers-reduced-motion: no-preference){
+          .census-dot{animation:census-pulse 1400ms ease-in-out infinite}
+          .census-dot[data-done="true"]{animation:none}
+          .fb-in{animation:fb-in 180ms ease-out both}
+        }
         @keyframes census-pulse{0%,100%{opacity:1}50%{opacity:.35}}
         @keyframes fb-in{from{opacity:0}to{opacity:1}}
-        .fb-in{animation:fb-in 180ms ease-out both}
         .census-legend{display:flex;gap:20px;flex-wrap:wrap;padding:16px 0 20px;margin-bottom:8px;
           border-bottom:1px solid var(--border);font-family:"JetBrains Mono",monospace;font-size:11px;
           color:var(--text-dim);letter-spacing:.06em}
@@ -120,7 +132,14 @@ export default function CensusPage() {
         .fb-label{flex:0 0 58px;font-family:"JetBrains Mono",monospace;font-size:10.5px;
           color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em}
         .fb-track{flex:1;height:8px;min-width:0;background:var(--border);border-radius:2px;overflow:hidden}
-        .fb-fill{height:100%;background:var(--signal);border-radius:2px;animation:fb-in 180ms ease-out both}
+        /* Grows on the transform axis, not width: the layout engine never scores a compositor-only
+           transform as a shift, so the device (the bar array) can carry a real motion moment
+           tied to its meaning without costing CLS. Final size is set once, at insertion, by width. */
+        .fb-fill{height:100%;background:var(--signal);border-radius:2px;transform-origin:left}
+        @media (prefers-reduced-motion: no-preference){
+          .fb-fill{animation:fb-grow 320ms cubic-bezier(0.23,1,0.32,1) both}
+        }
+        @keyframes fb-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
         .fb-value{flex:0 0 62px;text-align:right;font-family:"JetBrains Mono",monospace;font-size:12.5px;
           color:var(--text-primary);font-variant-numeric:tabular-nums}
         .fb-dim{color:var(--text-dim)}
@@ -133,7 +152,7 @@ export default function CensusPage() {
           .fb-label{flex:0 0 48px;font-size:10px}
           .fb-value{flex:0 0 54px;font-size:12px}
         }
-      `}</style>
+      ` }} />
 
       <div className="census-kicker">The Mark · Census</div>
       <h1 className="census-headline">the gap is 0.20%, the fill is up to 9x larger</h1>
@@ -145,9 +164,14 @@ export default function CensusPage() {
 
       <div className="census-status">
         <span className="census-dot" data-done={done} />
-        {`live · last read ${readAt ?? "--:--:--"}`}
+        <span>live · last read </span>
+        {/* readAt is a clock string read from a live call, not from the server's clock: server
+            and first client paint both show the placeholder, so hydration never sees the two
+            disagree. suppressHydrationWarning covers the one moment they intentionally diverge:
+            the instant the first live read lands. */}
+        <span suppressHydrationWarning>{readAt ?? "--:--:--"}</span>
         <span className="census-all" data-visible={done}>
-          &nbsp;· all rows read
+          {" "}· all rows read
         </span>
       </div>
 

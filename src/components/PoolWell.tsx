@@ -183,8 +183,9 @@ export default function PoolWell({ orderShare, fillPct, limitPct }: PoolWellProp
     gl.useProgram(prog);
 
     // a grid of triangles: the pool surface
-    const NX = 200;
-    const NY = 110;
+    // enough resolution for a smooth trench without making a software renderer crawl
+    const NX = 120;
+    const NY = 66;
     const verts: number[] = [];
     const idx: number[] = [];
     for (let j = 0; j <= NY; j++) {
@@ -225,7 +226,7 @@ export default function PoolWell({ orderShare, fillPct, limitPct }: PoolWellProp
 
     let mvp = buildMVP(1);
     const resize = () => {
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const dpr = Math.min(1.5, window.devicePixelRatio || 1);
       const w = Math.max(1, Math.floor(canvas.clientWidth * dpr));
       const h = Math.max(1, Math.floor(canvas.clientHeight * dpr));
       if (canvas.width !== w || canvas.height !== h) {

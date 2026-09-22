@@ -116,6 +116,7 @@ function ReceiptBlock({ result }: { result: TxReconciliation }) {
         borderRadius: "6px",
         padding: "24px",
         background: "var(--surface)",
+        animation: "proof-arrive 320ms cubic-bezier(0.23, 1, 0.32, 1)",
       }}
     >
       <div
@@ -282,8 +283,11 @@ function ProofPage() {
 
         <div
           data-device="tx-reconciliation"
-          className={signature ? "proof-reconcile-zone" : undefined}
-          style={{ transition: "border-color 320ms cubic-bezier(0.23, 1, 0.32, 1)" }}
+          className="proof-reconcile-zone"
+          style={{
+            transition: "border-color 320ms cubic-bezier(0.23, 1, 0.32, 1)",
+            animation: "proof-listening 1600ms ease-in-out infinite",
+          }}
         >
           {!signature && (
             <p style={dimText}>
@@ -346,6 +350,14 @@ function ProofPage() {
       </main>
 
       <style>{`
+        @keyframes proof-arrive {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes proof-listening {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.96; }
+        }
         .proof-h1 {
           font-family: Archivo, sans-serif;
           font-weight: 400;

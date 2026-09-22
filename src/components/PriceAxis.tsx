@@ -1,6 +1,7 @@
 "use client";
 
-import { useCountUp } from "@/lib/useCountUp";
+import { useCallback } from "react";
+import { useCountUp, useOdometerRef } from "@/lib/useCountUp";
 
 interface PriceAxisProps {
   tokenPrice: number;
@@ -20,8 +21,21 @@ export default function PriceAxis({
 }: PriceAxisProps) {
 
   // charter hero_technique: number-odometer. These travel to their new value.
-  const shownTokenPrice = useCountUp(tokenPrice);
-  const shownSharePrice = useCountUp(sharePrice);
+  const limitPct = Math.max(worstFillPct, 0.01);
+
+  // Text numbers travel without going through React state; only the bar geometry,
+  // which must re-lay-out, stays on state.
+  const money = useCallback((n: number) => `$${n.toFixed(2)}`, []);
+  const pctFill = useCallback((n: number) => `${n.toFixed(2)}% fill`, []);
+  const limitText = useCallback((n: number) => `your line ${n.toFixed(2)}%`, []);
+  const tokenRef = useOdometerRef<SVGTextElement>(tokenPrice, money);
+  const shareRef = useOdometerRef<SVGTextElement>(sharePrice, money);
+  const fillRef = useOdometerRef<SVGTextElement>(fillPercent, pctFill);
+  const limitRef = useOdometerRef<SVGTextElement>(limitPct, limitText);
+  const costRef = useOdometerRef<SVGTextElement>(
+    (amount * fillPercent) / 100,
+    useCallback((n: number) => `$${n.toFixed(2)} on $${amount.toFixed(0)}`, [amount])
+  );
   const shownFill = useCountUp(fillPercent);
 
 
@@ -30,7 +44,6 @@ export default function PriceAxis({
   // the end of the track IS the refusal, rather than a number quietly exceeding a threshold.
   const TRACK_START = 120;
   const TRACK_END = 900;
-  const limitPct = Math.max(worstFillPct, 0.01);
   const pctToSvgX = (pct: number) =>
     TRACK_START + Math.max(0, Math.min(1, pct / limitPct)) * (TRACK_END - TRACK_START);
 
@@ -39,7 +52,6 @@ export default function PriceAxis({
   const basisPct = tokenPrice > 0 ? ((sharePrice - tokenPrice) / tokenPrice) * 100 : 0;
   const shareX = pctToSvgX(Math.abs(basisPct));
 
-  const shownLimit = useCountUp(limitPct);
   const atLimit = fillPercent >= limitPct;
   const barEndX = pctToSvgX(fillPercent);
 
@@ -89,16 +101,12 @@ export default function PriceAxis({
 
         {/* The two prices sit at fixed ends of the header so they never collide, whatever the
             basis gap does. The ticks below them carry the position. */}
-        <text x="120" y="64" textAnchor="start" fontSize="58" fill="#FAFAFA" fontFamily="JetBrains Mono">
-          ${shownTokenPrice.toFixed(2)}
-        </text>
+        <text ref={tokenRef} x="120" y="64" textAnchor="start" fontSize="58" fill="#FAFAFA" fontFamily="JetBrains Mono" />
         <text x="120" y="106" textAnchor="start" fontSize="24" fill="#71717A" fontFamily="Archivo" letterSpacing="0.14em">
           YOU PAY
         </text>
 
-        <text x="900" y="64" textAnchor="end" fontSize="58" fill="#FAFAFA" fontFamily="JetBrains Mono">
-          ${shownSharePrice.toFixed(2)}
-        </text>
+        <text ref={shareRef} x="900" y="64" textAnchor="end" fontSize="58" fill="#FAFAFA" fontFamily="JetBrains Mono" />
         <text x="900" y="106" textAnchor="end" fontSize="24" fill="#71717A" fontFamily="Archivo" letterSpacing="0.14em">
           THE SHARE
         </text>
@@ -117,34 +125,14 @@ export default function PriceAxis({
 
         {/* The line you set: the right end of the track */}
         <line x1={TRACK_END} y1="150" x2={TRACK_END} y2="252" stroke="#C4261D" strokeWidth="3" opacity="0.65" />
-        <text x={TRACK_END} y="140" textAnchor="end" fontSize="20" fill="#C4261D" fontFamily="JetBrains Mono" opacity="0.8">
-          your line {shownLimit.toFixed(2)}%
-        </text>
+        <text ref={limitRef} x={TRACK_END} y="140" textAnchor="end" fontSize="20" fill="#C4261D" fontFamily="JetBrains Mono" opacity="0.8" />
 
         {/* The order: its length is the cost as a share of the line you set */}
         <rect x={tokenX + 2} y="179" width={barWidth} height="32" fill={barColor}>
         </rect>
 
-        <text
-          x={captionX}
-          y="275"
-          textAnchor={captionAnchor as any}
-          fontSize="24"
-          fill={captionFill}
-          fontFamily="JetBrains Mono"
-        >
-          {shownFill.toFixed(2)}% fill
-        </text>
-        <text
-          x={captionX}
-          y="296"
-          textAnchor={captionAnchor as any}
-          fontSize="20"
-          fill={captionFill}
-          fontFamily="JetBrains Mono"
-        >
-          ${((amount * shownFill) / 100).toFixed(2)} on ${amount.toFixed(0)}
-        </text>
+        <text ref={fillRef} x={captionX} y="275" textAnchor={captionAnchor as any} fontSize="24" fill={captionFill} fontFamily="JetBrains Mono" />
+        <text ref={costRef} x={captionX} y="296" textAnchor={captionAnchor as any} fontSize="20" fill={captionFill} fontFamily="JetBrains Mono" />
       </svg>
     </div>
   );

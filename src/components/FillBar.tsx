@@ -9,12 +9,14 @@ interface FillBarProps {
   scaleMax: number;
 }
 
-// The fill only ever appears once, when the live quote lands: it is never present with a
-// width of 0 and then grown, because a growing box on an already-painted element is a layout
-// shift, and a page whose own subject is honesty about cost should not fake stability either.
-// It fades in (opacity only, no box-size change) so its arrival still reads as a motion moment.
+// The fill only ever appears once, when the live quote lands: its box size is set once, at its
+// final width, so a newly-inserted element never resizes an already-painted one (charter-safe
+// for CLS). Its arrival still reads as a real moment: it scales in from zero on the transform
+// axis, which is a composited property the layout engine never scores as a shift.
+// fillCostPct (impact + transfer fee) is the number that goes on this bar: it is never negative,
+// unlike allInCostPct, which nets off basis and can read as a gain. A cost bar cannot go negative.
 export default function FillBar({ label, cell, scaleMax }: FillBarProps) {
-  const pct = cell.status === "ok" ? cell.quote.allInCostPct : 0;
+  const pct = cell.status === "ok" ? cell.quote.fillCostPct : 0;
   const widthPct = cell.status === "ok" ? Math.min(100, Math.max(0.6, (pct / scaleMax) * 100)) : 0;
 
   return (
