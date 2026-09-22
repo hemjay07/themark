@@ -263,7 +263,7 @@ export default function Home() {
         @media (min-width:1040px){
           .fold-grid{grid-template-columns:minmax(0,1fr) minmax(0,620px);gap:44px;
             padding:0 24px;align-items:start}
-          .fold-grid > header{position:sticky;top:84px}
+          .fold-left{position:sticky;top:84px}
         }
       ` }} />
       {/* The fold says what this is before it shows the instrument. A stranger arriving here
@@ -274,6 +274,7 @@ export default function Home() {
         limitPct={effectiveLimit}
       >
       <div className="fold-grid">
+      <div className="fold-left">
       <header style={{ width: "100%", padding: "56px 4px 24px" }}>
         <h1 style={{
           fontFamily: '"Archivo", sans-serif',
@@ -405,6 +406,7 @@ export default function Home() {
         </div>
       </section>
 
+      </div>
       <main style={{
         width: "100%",
         maxWidth: "620px",
