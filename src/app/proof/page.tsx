@@ -174,6 +174,12 @@ function ReceiptBlock({ result }: { result: TxReconciliation }) {
   );
 }
 
+// A real Palantir purchase that settled on Solana mainnet, verified against the RPC on
+// 2026-09-22. It only prefills the input so a visitor can see the feature work; every figure
+// shown for it is still read live off the chain at the moment of the check.
+const EXAMPLE_SIG =
+  "2DDngyQMJQAyPxmcRfjW8YdhDAbvtxLpctRapRED8TQW1bRSGuNwdT1jjaZHGHFAXXabgFbKidJwKLVaghV9YfLE";
+
 function ProofPage() {
   const [sigInput, setSigInput] = useState("");
   const [signature, setSignature] = useState<string | null>(null);
@@ -274,13 +280,13 @@ function ProofPage() {
                 submitSignature();
               }
             }}
-            placeholder="paste a transaction signature"
+            placeholder="paste a receipt code from any Solana trade"
             spellCheck={false}
             rows={2}
             style={inputStyle}
           />
           <button type="submit" style={buttonStyle} disabled={loading}>
-            {loading ? "reading…" : "reconcile"}
+            {loading ? "reading…" : "check it"}
           </button>
         </form>
 
@@ -290,13 +296,42 @@ function ProofPage() {
           style={{
             transition: "border-color 320ms cubic-bezier(0.23, 1, 0.32, 1)",
             animation: "proof-listening 1600ms ease-in-out infinite",
+            // the zone only reserves a receipt's worth of height once there IS one to reserve;
+            // before that it collapsed to a blank half-screen that read as a broken page
+            minHeight: signature ? undefined : "auto",
           }}
         >
           {!signature && (
-            <p style={dimText}>
-              no signature yet, so there is nothing to reconcile. paste one above, or open this page with
-              ?sig=&lt;signature&gt;.
-            </p>
+            <div>
+              <p style={{ ...dimText, marginBottom: "14px" }}>
+                Nothing to check yet. Every trade on Solana leaves a public receipt code. Paste one
+                above and this reads that trade off the public record and works out what it really
+                cost, or try a real one:
+              </p>
+              <button
+                onClick={() => {
+                  setSigInput(EXAMPLE_SIG);
+                  setSignature(EXAMPLE_SIG);
+                }}
+                style={{
+                  fontFamily: '"Archivo", sans-serif',
+                  fontSize: "13px",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  padding: "11px 16px",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  background: "var(--text-primary)",
+                  color: "var(--bg)",
+                  border: "1px solid var(--text-primary)",
+                }}
+              >
+                Check a real trade
+              </button>
+              <p style={{ ...dimText, marginTop: "12px", fontSize: "11px" }}>
+                a real Palantir purchase that settled on Solana mainnet
+              </p>
+            </div>
           )}
 
           {signature && loading && <p style={dimText}>reading {shortSig(signature)} off mainnet…</p>}
@@ -319,10 +354,12 @@ function ProofPage() {
         </div>
 
         <section style={{ marginTop: "56px", paddingTop: "32px", borderTop: "1px solid var(--border)" }}>
-          <div style={microLabel}>read live · scaledUiAmountConfig &amp; transferFeeConfig</div>
-          <p style={{ ...dimText, marginTop: "10px", maxWidth: "58ch" }}>
-            a wallet shows multiplier-scaled units. a cost computed without this is wrong by more than
-            the price impact it is measuring.
+          <div style={microLabel}>the hidden charges, read live off each token</div>
+          <p style={{ ...dimText, marginTop: "10px", maxWidth: "62ch" }}>
+            Two things quietly change what a token is worth, and no price feed shows either. Some
+            tokens grow your balance over time instead of paying a dividend, so the number in your
+            wallet is not the number you bought. Others take a cut every time the token moves.
+            Both are read here from the token itself, right now.
           </p>
           <div style={{ marginTop: "20px", display: "grid", gap: "1px", background: "var(--border)" }}>
             {findings.map((f) => (
