@@ -15,7 +15,7 @@ const mono: CSSProperties = {
 };
 
 const wordmarkStyle: CSSProperties = {
-  height: "16px",
+  height: "18px",
   width: "auto",
   display: "block",
 };
@@ -47,7 +47,7 @@ export default function Nav() {
       }}
     >
       <a href="/" aria-label="THE MARK" style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-        <img src="/brand/wordmark.svg" alt="THE MARK" style={wordmarkStyle} />
+        <img src="/brand/lockup.svg" alt="THE MARK" style={wordmarkStyle} />
       </a>
       <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
         {ROUTES.map((route) => {

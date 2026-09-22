@@ -5,13 +5,14 @@ import { getQuote, getSwapTransaction, fetchPrices, rateLimitedRecently } from "
 import { reconcileTransaction } from "@/lib/tx";
 import { TOKEN_LIST, getTokenBySymbol, USDC_MINT, getToken } from "@/lib/tokens";
 import type { QuoteResult, Receipt as ReceiptType } from "@/lib/types";
-import PriceAxis from "@/components/PriceAxis";
-import PoolDrain from "@/components/PoolDrain";
 import PoolHero from "@/components/PoolHero";
 import Odometer from "@/components/Odometer";
+import HeroSection from "@/components/HeroSection";
+import ControlsSection from "@/components/ControlsSection";
 import KeptVsLost from "@/components/KeptVsLost";
 import RouteBreakdown from "@/components/RouteBreakdown";
 import IssuerControlBadges from "@/components/IssuerControlBadges";
+import PoolDrain from "@/components/PoolDrain";
 
 export default function Home() {
   const [amount, setAmount] = useState("5000");
@@ -253,638 +254,322 @@ export default function Home() {
   const isBelow = netPercent < 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "20px" }}>
-      {/* dangerouslySetInnerHTML, not a text child: <style> is a raw-text element, so React's
-          SSR serializer escapes ">" in a selector while the browser never decodes it, which is a
-          real hydration mismatch (React #425). */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        .fold-grid{width:100%;max-width:1220px;margin:0 auto;display:grid;gap:28px;
-          grid-template-columns:1fr;align-items:start}
-        @media (min-width:1040px){
-          .fold-grid{grid-template-columns:minmax(0,1fr) minmax(0,620px);gap:44px;
-            padding:0 24px;align-items:start}
-          .fold-left{position:sticky;top:84px}
-        }
-      ` }} />
-      {/* The fold says what this is before it shows the instrument. A stranger arriving here
-          should know the product and the claim in three seconds, without reading a number. */}
-      <PoolHero
-        orderShare={quote && quote.liquidityUsd > 0 ? amountNum / quote.liquidityUsd : 0}
-        fillPct={quote?.fillCostPct ?? 0}
-        limitPct={effectiveLimit}
-      >
-      <div className="fold-grid">
-      <div className="fold-left">
-      <header style={{ width: "100%", padding: "56px 4px 24px" }}>
-        <h1 style={{
-          fontFamily: '"Archivo", sans-serif',
-          fontSize: "clamp(28px, 5.2vw, 46px)",
-          lineHeight: 1.08,
-          letterSpacing: "-0.02em",
-          fontWeight: 400,
-          color: "var(--text-primary)",
-          margin: "0 0 18px",
-        }}>
-          Buying a stock on Solana? You are probably overpaying, and nothing tells you by how much.
-        </h1>
-        <p style={{
-          fontFamily: '"Archivo", sans-serif',
-          fontSize: "clamp(14px, 2vw, 17px)",
-          lineHeight: 1.55,
-          color: "var(--text-muted)",
-          margin: "0 0 20px",
-          maxWidth: "58ch",
-        }}>
-          Say you want $500 of Palantir. On Solana you buy a token that tracks the real share, but
-          the price you actually get is worse than the real share price. Sometimes by pennies.
-          Sometimes by hundreds of dollars. THE MARK works out that difference before you buy, in
-          plain dollars, and stops the trade if it is bigger than you said you would accept.
-        </p>
-        <div style={{
-          display: "flex",
-          gap: "10px",
-          flexWrap: "wrap",
-          fontFamily: '"JetBrains Mono", monospace',
-          fontSize: "11px",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "var(--text-dim)",
-        }}>
-          <span style={{ border: "1px solid var(--border)", borderRadius: "3px", padding: "5px 9px" }}>
-            1 · pick a stock and an amount
-          </span>
-          <span style={{ border: "1px solid var(--border)", borderRadius: "3px", padding: "5px 9px" }}>
-            2 · see exactly what you overpay
-          </span>
-          <span style={{ border: "1px solid var(--border)", borderRadius: "3px", padding: "5px 9px" }}>
-            3 · it blocks the bad trade
-          </span>
-        </div>
-        <p style={{
-          fontFamily: '"Archivo", sans-serif',
-          fontSize: "13px",
-          lineHeight: 1.55,
-          color: "var(--text-dim)",
-          margin: "18px 0 0",
-          maxWidth: "58ch",
-        }}>
-          You do not need a wallet to use any of this. Everything below is live right now. A wallet
-          is only needed for the last step, actually placing the order.
-        </p>
-      </header>
-      {/* The rest of the product, said plainly, so a reader knows there are two more surfaces. */}
-      <section style={{ width: "100%", padding: "8px 4px 0" }}>
-        <div style={{
-          fontFamily: '"JetBrains Mono", monospace',
-          fontSize: "11px",
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-          color: "var(--text-dim)",
-          marginBottom: "16px",
-        }}>
-          Two more surfaces
-        </div>
-        <div style={{ display: "grid", gap: "12px", gridTemplateColumns: "1fr" }}>
-          <a
-            href="/census"
-            style={{
-              display: "block",
-              padding: "18px",
-              border: "1px solid var(--border)",
-              borderRadius: "6px",
-              textDecoration: "none",
-              background: "var(--surface)",
-            }}
-          >
-            <div style={{
-              fontFamily: '"Archivo", sans-serif',
-              fontSize: "17px",
-              color: "var(--text-primary)",
-              marginBottom: "8px",
-            }}>
-              The census
-            </div>
-            <div style={{
-              fontFamily: '"Archivo", sans-serif',
-              fontSize: "14px",
-              lineHeight: 1.5,
-              color: "var(--text-muted)",
-            }}>
-              The same check run on every stock at once, for three different amounts. Some cost you
-              almost nothing. One costs you forty times more. Worth a look before you pick.
-            </div>
-          </a>
-          <a
-            href="/proof"
-            style={{
-              display: "block",
-              padding: "18px",
-              border: "1px solid var(--border)",
-              borderRadius: "6px",
-              textDecoration: "none",
-              background: "var(--surface)",
-            }}
-          >
-            <div style={{
-              fontFamily: '"Archivo", sans-serif',
-              fontSize: "17px",
-              color: "var(--text-primary)",
-              marginBottom: "8px",
-            }}>
-              The proof
-            </div>
-            <div style={{
-              fontFamily: '"Archivo", sans-serif',
-              fontSize: "14px",
-              lineHeight: 1.5,
-              color: "var(--text-muted)",
-            }}>
-              Paste the receipt code from any past trade and it checks, against the public record,
-              whether what was promised beforehand is what actually happened.
-            </div>
-          </a>
-        </div>
-      </section>
+    <PoolHero
+      orderShare={quote && quote.liquidityUsd > 0 ? amountNum / quote.liquidityUsd : 0}
+      fillPct={quote?.fillCostPct ?? 0}
+      limitPct={effectiveLimit}
+    >
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", minHeight: "100vh" }}>
+        {/* Hero section: cost number + limit line */}
+        <HeroSection
+          costUsd={quote?.fillCostUsd ?? 0}
+          costPct={quote?.fillCostPct ?? 0}
+          limitPct={effectiveLimit}
+          fillPct={quote?.fillCostPct ?? 0}
+          amountUsd={amountNum}
+          isBlocked={shouldRefuse}
+          selectedStock={selectedToken}
+          hasQuote={Boolean(quote)}
+        />
 
-      </div>
-      <main style={{
-        width: "100%",
-        maxWidth: "620px",
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: "8px",
-        padding: "32px",
-      }}>
+        {/* Controls section: stock chips, amount slider, limit input */}
+        <ControlsSection
+          selectedToken={selectedToken}
+          onSelectToken={setSelectedToken}
+          amount={amount}
+          onAmountChange={handleAmountChange}
+          onSliderChange={handleSliderChange}
+          worstFillPct={worstFillPct}
+          onLimitChange={setWorstFillPct}
+          costByToken={costByToken}
+        />
 
-        {/* Which stock. Without this the product quotes one token forever. */}
-        <div style={{ marginBottom: "24px" }}>
-          <div style={{
-            fontSize: "11px",
-            color: "var(--text-dim)",
-            textTransform: "uppercase",
-            letterSpacing: "0.12em",
-            marginBottom: "10px",
-            fontFamily: '"JetBrains Mono", monospace',
-          }}>1 · Which stock do you want</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-            {TOKEN_LIST.map((t) => {
-              const active = t.symbol === selectedToken;
-              const cost = costByToken[t.symbol];
-              return (
-                <button
-                  key={t.mint}
-                  onClick={() => setSelectedToken(t.symbol)}
-                  aria-pressed={active}
-                  title={t.name}
-                  style={{
-                    fontFamily: '"JetBrains Mono", monospace',
-                    fontSize: "12px",
-                    padding: "7px 11px",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    background: active ? "var(--text-primary)" : "transparent",
-                    color: active ? "var(--bg)" : "var(--text-muted)",
-                    border: `1px solid ${active ? "var(--text-primary)" : "var(--border)"}`,
-                    transition: "background 120ms ease-out, color 120ms ease-out",
-                  }}
-                >
-                  <span>{t.symbol}</span>
-                  <span style={{
-                    display: "block",
-                    fontSize: "10px",
-                    marginTop: "3px",
-                    opacity: 0.85,
-                    color: active
-                      ? "var(--bg)"
-                      : cost === null || cost === undefined
-                        ? "var(--text-dim)"
-                        : cost > 1
-                          ? "var(--signal)"
-                          : "var(--text-dim)",
-                  }}>
-                    {cost === undefined ? "…" : cost === null ? "—" : `${cost.toFixed(2)}%`}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* The pool itself is now the ground of the fold above, not a tile in this card. */}
-        <div style={{
-          marginBottom: "22px",
-          fontSize: "11px",
-          fontFamily: '"JetBrains Mono", monospace',
-          color: "var(--text-dim)",
-          letterSpacing: "0.04em",
-          lineHeight: 1.6,
-          minHeight: "36px",
-        }}>
-          {quote
-            ? `the surface behind this page is the supply your order buys from, $${Math.round(quote.liquidityUsd).toLocaleString()} of it${
-                quote.routeLegs > 1 ? `, spread across ${quote.routeLegs} places` : ""
-              }. the gouge in it is the bite your order takes.`
-            : "reading what is available to buy right now"}
-        </div>
-
-        {/* The number this surface exists to say, at the size that says it. It used to be
-            11px red mono under a pair of 30px prices whose difference was the actual point. */}
-        <div style={{ margin: "26px 0 6px", minHeight: "118px" }}>
-          <div style={{
-            fontSize: "11px",
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
-            color: "var(--text-dim)",
-            fontFamily: '"JetBrains Mono", monospace',
-            marginBottom: "6px",
-          }}>
-            What this order costs you
-          </div>
-          <div style={{
-            fontFamily: '"JetBrains Mono", monospace',
-            fontSize: "clamp(40px, 9vw, 68px)",
-            lineHeight: 1,
-            letterSpacing: "-0.02em",
-            color: shouldRefuse ? "var(--signal)" : "var(--text-primary)",
-            fontVariantNumeric: "tabular-nums",
-          }}>
-            {quote ? <Odometer value={quote.fillCostUsd} prefix="$" /> : "$—"}
-          </div>
-          <div style={{
-            fontFamily: '"Archivo", sans-serif',
-            fontSize: "14px",
-            color: "var(--text-muted)",
-            marginTop: "10px",
-            lineHeight: 1.5,
-          }}>
-            {quote
-              ? `extra on your $${amountNum.toFixed(0)}, which is ${quote.fillCostPct.toFixed(2)}% of what you spend`
-              : "reading the pool right now"}
-          </div>
-        </div>
-
-        {/* Kept versus lost, in absolute dollars. Same figures already on screen above, said
-            the way a stranger feels them: what becomes shares, what is gone in costs. */}
-        {quote && (
-          <div style={{
-            background: "var(--bg)",
-            border: "1px solid var(--border)",
-            borderRadius: "6px",
-            padding: "18px 20px",
-            marginBottom: "8px",
-          }}>
-            <KeptVsLost amountInUsd={quote.amountInUsd} costUsd={quote.fillCostUsd} />
-          </div>
-        )}
-
-        {/* Price Axis. The wrapper holds the axis's exact aspect ratio before the quote
-            lands, so the arriving numbers do not push the page down. */}
-        <div style={{ margin: "40px 0 36px", aspectRatio: "1000 / 300", width: "100%" }}>
-          {quote && (
-            <PriceAxis
-              tokenPrice={quote.effectivePrice}
-              sharePrice={quote.referencePrice}
-              fillPercent={quote.fillCostPct}
-              amount={amountNum}
-              worstFillPct={effectiveLimit}
-            />
-          )}
-        </div>
-
-        {/* The reading, in one sentence */}
-        <p style={{
-          fontSize: "15px",
-          fontWeight: "400",
-          marginBottom: "32px",
-          marginTop: "0",
-          color: "var(--text-primary)",
-          textAlign: "center",
-          letterSpacing: "-0.01em",
-          lineHeight: 1.2,
-        } as any}>
-          All in, you end up{" "}
-          <span style={{ color: isBelow ? "var(--success)" : "var(--signal)" }}>
-            <Odometer value={Math.abs(netPercent)} />
-          </span>
-          % {isBelow ? "cheaper than" : "dearer than"} the real{" "}
-          {selectedToken.replace(/^t/, "").replace(/x$/, "")} share
-          {quote ? `, about $${Math.abs((netPercent / 100) * amountNum).toFixed(2)} on $${amountNum.toFixed(0)}` : ""}
-        </p>
-
-        {/* Amount Input */}
-        <div style={{ marginBottom: "32px" }}>
-          <div style={{
-            fontSize: "12px",
-            color: "var(--text-dim)",
-            textTransform: "uppercase",
-            letterSpacing: "0.1em",
-            marginBottom: "8px",
-          }}>2 · How much do you want to spend</div>
-          <input
-            type="number"
-            value={amount}
-            onChange={handleAmountChange}
-            min="10"
-            max="25000"
-            step="100"
+        {/* Error message display */}
+        {error && (
+          <div
             style={{
               width: "100%",
-              padding: "12px",
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
-              borderRadius: "4px",
+              maxWidth: "800px",
+              margin: "0 auto 32px",
+              padding: "16px 24px",
+              background: "rgba(196, 38, 29, 0.06)",
+              border: "1px solid var(--signal)",
+              borderRadius: "6px",
               color: "var(--text-primary)",
-              fontFamily: '"JetBrains Mono", monospace',
-              fontSize: "16px",
-              marginBottom: "16px",
+              fontFamily: '"Archivo", sans-serif',
+              fontSize: "14px",
+              lineHeight: 1.5,
             }}
-          />
-          <div style={{ position: "relative" }}>
-            <input
-              type="range"
-              min="100"
-              max="25000"
-              step="100"
-              value={amount}
-              onChange={handleSliderChange}
-              style={{
-                width: "100%",
-                height: "4px",
-                borderRadius: "2px",
-                outline: "none",
-                appearance: "none",
-                accentColor: "#C4261D",
-                background: `linear-gradient(to right, var(--signal) 0%, var(--signal) ${fillPercent}%, var(--border) ${fillPercent}%, var(--border) 100%)`,
-              } as any}
-            />
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              padding: "0 8px",
-              marginTop: "8px",
-              fontSize: "10px",
-              color: "var(--text-dim)",
-            }}>
-              <span>$10</span>
-              <span>$5K</span>
-              <span>$25K</span>
-            </div>
-          </div>
-        </div>
-
-        {/* The pool, drawn as depth blocks the order eats. Live liquidity from the quote. */}
-        <div style={{
-          background: "var(--bg)",
-          border: "1px solid var(--border)",
-          borderRadius: "6px",
-          padding: "20px",
-          marginBottom: "32px",
-        }}>
-          <PoolDrain
-            amountUsd={amountNum}
-            liquidityUsd={quote?.liquidityUsd ?? 0}
-            refusing={Boolean(shouldRefuse)}
-          />
-          <div style={{
-            fontSize: "11px",
-            color: "var(--text-dim)",
-            marginTop: "16px",
-            minHeight: "32px",
-            fontFamily: '"JetBrains Mono", monospace',
-          }}>
-            {!quote
-              ? "checking whether this token pays out by quietly growing your balance"
-              : !quote.multiplierKnown
-                ? "could not check whether this token grows your balance over time, so that is not counted above"
-                : quote.multiplier === 1
-                  ? "this token does not grow your balance over time, so what you buy is what you hold"
-                  : `this token has grown ${((quote.multiplier - 1) * 100).toFixed(2)}% since launch instead of paying a dividend, and that is counted above`}
-          </div>
-        </div>
-
-        {/* Where the money actually goes: the router's own routePlan, already fetched with
-            every quote and never shown until now. */}
-        <div style={{
-          background: "var(--bg)",
-          border: "1px solid var(--border)",
-          borderRadius: "6px",
-          padding: "20px",
-          marginBottom: "32px",
-        }}>
-          {quote ? <RouteBreakdown raw={quote.raw} /> : (
-            <div style={{
-              fontFamily: '"JetBrains Mono", monospace',
-              fontSize: "12px",
-              color: "var(--text-dim)",
-            }}>
-              reading where this order would route
-            </div>
-          )}
-        </div>
-
-        {/* What the issuer of this mint can do to a holder's money, read live off the mint
-            account. A failed read is never shown as a clean bill (charter ban 1). */}
-        {(quote || loading) && (
-          <div style={{
-            background: "var(--bg)",
-            border: "1px solid var(--border)",
-            borderRadius: "6px",
-            padding: "20px",
-            marginBottom: "32px",
-          }}>
-            <IssuerControlBadges
-              extensions={quote ? quote.extensions : null}
-              loading={!quote}
-            />
+          >
+            {error}
           </div>
         )}
 
-        {/* Worst Fill Input */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "24px",
-          marginBottom: "32px",
-          paddingBottom: "24px",
-          paddingTop: "24px",
-          borderTop: "1px solid var(--border)",
-          borderBottom: "1px solid var(--border)",
-        }}>
-          <div style={{ textAlign: "left" }}>
-            <div style={{
-              fontSize: "11px",
-              color: "var(--text-dim)",
-              textTransform: "uppercase",
-              letterSpacing: "0.12em",
-              marginBottom: "6px",
-            }}>3 · Block the trade if I overpay more than</div>
-            <input
-              type="number"
-              min="0"
-              max="10"
-              step="0.01"
-              value={worstFillPct}
-              onChange={(e) => setWorstFillPct(parseFloat(e.target.value))}
-              style={{
-                padding: "8px",
-                fontSize: "14px",
-                background: "var(--bg)",
-                border: "1px solid var(--border)",
-                borderRadius: "4px",
-                color: "var(--text-primary)",
-                fontFamily: '"JetBrains Mono", monospace',
-                width: "100%",
-              }}
-            />
-          </div>
-          <div style={{ textAlign: "left" }}>
-            <div style={{
-              fontSize: "11px",
-              color: "var(--text-dim)",
-              textTransform: "uppercase",
-              letterSpacing: "0.12em",
-              marginBottom: "6px",
-            }}>What happens then</div>
-            <div style={{ fontSize: "13px", color: "var(--text-dim)", paddingTop: "8px" }}>the button below stops you</div>
-          </div>
-        </div>
-
-        {/* The sign control. Above the line the founder set, it stops being a button and becomes
-            a refusal that states the number: the product's whole claim, made visible. */}
-        {shouldRefuse && quote ? (
+        {/* Refusal state */}
+        {shouldRefuse && quote && (
           <div
             data-refusal
             style={{
               width: "100%",
-              marginTop: "24px",
-              padding: "20px",
+              maxWidth: "800px",
+              margin: "0 auto 32px",
+              padding: "20px 24px",
               border: "1px solid var(--signal)",
-              borderRadius: "4px",
+              borderRadius: "6px",
               background: "rgba(196, 38, 29, 0.06)",
               animation: "refuse-in 180ms cubic-bezier(0.23, 1, 0.32, 1)",
             }}
           >
-            <div style={{
-              fontFamily: '"Archivo", sans-serif',
-              fontSize: "14px",
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-              color: "var(--signal)",
-              marginBottom: "10px",
-            }}>
+            <div
+              style={{
+                fontFamily: '"Archivo", sans-serif',
+                fontSize: "14px",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: "var(--signal)",
+                marginBottom: "10px",
+              }}
+            >
               Blocked
             </div>
-            <div style={{
-              fontFamily: '"JetBrains Mono", monospace',
-              fontSize: "13px",
-              color: "var(--text-primary)",
-              lineHeight: 1.5,
-            }}>
+            <div
+              style={{
+                fontFamily: '"JetBrains Mono", monospace',
+                fontSize: "13px",
+                color: "var(--text-primary)",
+                lineHeight: 1.5,
+              }}
+            >
               This order would cost you{" "}
               <Odometer value={quote.fillCostUsd} prefix="$" style={{ color: "var(--signal)" }} /> extra, which
               is <Odometer value={quote.fillCostPct} suffix="%" style={{ color: "var(--signal)" }} /> of what
               you are spending. You said to block anything over{" "}
-              {limitIsSet ? `${effectiveLimit.toFixed(2)}%` : "nothing, so everything is blocked"}.
-            </div>
-            <div style={{
-              fontFamily: '"JetBrains Mono", monospace',
-              fontSize: "11px",
-              color: "var(--text-dim)",
-              marginTop: "10px",
-            }}>
-              try a smaller amount, a different stock, or raise your limit
+              {limitIsSet ? `${effectiveLimit.toFixed(2)}%` : "nothing"}.
             </div>
           </div>
-        ) : (
-          <button
-            onClick={connected ? handleSign : handleConnect}
-            disabled={signing || settling || (connected && !quote)}
-            style={{
-              width: "100%",
-              padding: "16px",
-              background: "transparent",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-              fontFamily: '"Archivo", sans-serif',
-              fontSize: "14px",
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-              cursor: signing || (connected && !quote) ? "not-allowed" : "pointer",
-              borderRadius: "4px",
-              transition: "all 120ms ease-out",
-              marginTop: "24px",
-            }}
-            onMouseOver={(e) => (e.currentTarget.style.background = "var(--surface)")}
-            onMouseOut={(e) => (e.currentTarget.style.background = "transparent")}
-          >
-            {!connected
-              ? "Connect a wallet to place this order"
-              : signing
-                ? "Signing…"
-                : settling
-                  ? "Waiting for the chain…"
-                  : "Place this order"}
-          </button>
         )}
 
-        {/* Receipt Display */}
-        {receipt && (
-          <div style={{
-            marginTop: "32px",
-            padding: "20px",
-            background: "var(--bg)",
-            border: "2px solid var(--success)",
-            borderRadius: "6px",
-          }}>
-            <div style={{ textAlign: "center", marginBottom: "20px" }}>
-              <p style={{ fontSize: "24px", marginBottom: "8px" }}>✓</p>
-              <h2 style={{ fontSize: "20px", fontWeight: "bold", color: "var(--success)" }}>RECEIPT</h2>
-            </div>
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "16px",
-              fontSize: "14px",
-            }}>
-              <div>
-                <p style={{ color: "var(--text-muted)" }}>Filled at</p>
-                <p style={{ fontSize: "16px", fontWeight: "600" }}>${receipt.filledPrice.toFixed(2)}</p>
-              </div>
-              <div>
-                <p style={{ color: "var(--text-muted)" }}>Reference</p>
-                <p style={{ fontSize: "16px", fontWeight: "600" }}>${receipt.referencePrice.toFixed(2)}</p>
-              </div>
-              <div>
-                <p style={{ color: "var(--text-muted)" }}>You Paid</p>
-                <p style={{ fontSize: "16px", fontWeight: "600" }}>${receipt.amountInUsdc.toFixed(2)}</p>
-              </div>
-              <div>
-                <p style={{ color: "var(--text-muted)" }}>You Received</p>
-                <p style={{ fontSize: "16px", fontWeight: "600" }}>{receipt.amountOutTokens.toFixed(2)} {receipt.tokenSymbol}</p>
-              </div>
-            </div>
+        {/* Sign/Connect button */}
+        {!shouldRefuse && (
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "800px",
+              margin: "0 auto 64px",
+              padding: "0 24px",
+            }}
+          >
             <button
-              onClick={() => setReceipt(null)}
+              onClick={connected ? handleSign : handleConnect}
+              disabled={signing || settling || (connected && !quote)}
               style={{
                 width: "100%",
-                padding: "12px",
-                marginTop: "16px",
-                background: "var(--border)",
+                padding: "16px",
+                background: "transparent",
                 border: "1px solid var(--border)",
                 color: "var(--text-primary)",
+                fontFamily: '"Archivo", sans-serif',
+                fontSize: "14px",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                cursor: signing || (connected && !quote) ? "not-allowed" : "pointer",
                 borderRadius: "4px",
-                cursor: "pointer",
+                transition: "all 120ms ease-out",
               }}
+              onMouseOver={(e) => (e.currentTarget.style.background = "var(--surface)")}
+              onMouseOut={(e) => (e.currentTarget.style.background = "transparent")}
             >
-              New Order
+              {!connected
+                ? "Connect a wallet to place this order"
+                : signing
+                  ? "Signing…"
+                  : settling
+                    ? "Waiting for the chain…"
+                    : "Place this order"}
             </button>
           </div>
         )}
-      </main>
 
+        {/* Below the fold: additional sections */}
+        <div style={{
+          width: "100%",
+          maxWidth: "800px",
+          margin: "0 auto",
+          padding: "0 24px 64px",
+        }}>
+          {/* What this order touches */}
+          <section style={{ marginBottom: "48px" }}>
+            <h2
+              style={{
+                fontFamily: '"Archivo", sans-serif',
+                fontSize: "18px",
+                fontWeight: "400",
+                color: "var(--text-primary)",
+                marginBottom: "24px",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              What else this order touches
+            </h2>
+
+            {/* Kept versus lost */}
+            {quote && (
+              <div
+                style={{
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "6px",
+                  padding: "20px",
+                  marginBottom: "24px",
+                }}
+              >
+                <KeptVsLost amountInUsd={quote.amountInUsd} costUsd={quote.fillCostUsd} />
+              </div>
+            )}
+
+            {/* Where money goes */}
+            {quote && (
+              <div
+                style={{
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "6px",
+                  padding: "20px",
+                  marginBottom: "24px",
+                }}
+              >
+                <RouteBreakdown raw={quote.raw} />
+              </div>
+            )}
+
+            {/* Issuer controls */}
+            {(quote || loading) && (
+              <div
+                style={{
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "6px",
+                  padding: "20px",
+                  marginBottom: "24px",
+                }}
+              >
+                <IssuerControlBadges
+                  extensions={quote ? quote.extensions : null}
+                  loading={!quote}
+                />
+              </div>
+            )}
+
+            {/* Pool drain visualization */}
+            {quote && (
+              <div
+                style={{
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "6px",
+                  padding: "20px",
+                }}
+              >
+                <PoolDrain
+                  amountUsd={amountNum}
+                  liquidityUsd={quote.liquidityUsd}
+                  refusing={Boolean(shouldRefuse)}
+                />
+              </div>
+            )}
+          </section>
+
+          {/* Other surfaces */}
+          <section style={{ marginBottom: "48px" }}>
+            <h2
+              style={{
+                fontFamily: '"Archivo", sans-serif',
+                fontSize: "18px",
+                fontWeight: "400",
+                color: "var(--text-primary)",
+                marginBottom: "24px",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              More surfaces
+            </h2>
+            <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "1fr" }}>
+              <a
+                href="/census"
+                style={{
+                  display: "block",
+                  padding: "20px",
+                  border: "1px solid var(--border)",
+                  borderRadius: "6px",
+                  textDecoration: "none",
+                  background: "var(--surface)",
+                  transition: "background 120ms ease-out",
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
+                onMouseOut={(e) => (e.currentTarget.style.background = "var(--surface)")}
+              >
+                <div
+                  style={{
+                    fontFamily: '"Archivo", sans-serif',
+                    fontSize: "16px",
+                    fontWeight: "500",
+                    color: "var(--text-primary)",
+                    marginBottom: "8px",
+                  }}
+                >
+                  Census
+                </div>
+                <div
+                  style={{
+                    fontFamily: '"Archivo", sans-serif',
+                    fontSize: "14px",
+                    lineHeight: 1.5,
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Compare all tokens at once, ranked by what your order really costs.
+                </div>
+              </a>
+              <a
+                href="/proof"
+                style={{
+                  display: "block",
+                  padding: "20px",
+                  border: "1px solid var(--border)",
+                  borderRadius: "6px",
+                  textDecoration: "none",
+                  background: "var(--surface)",
+                  transition: "background 120ms ease-out",
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
+                onMouseOut={(e) => (e.currentTarget.style.background = "var(--surface)")}
+              >
+                <div
+                  style={{
+                    fontFamily: '"Archivo", sans-serif',
+                    fontSize: "16px",
+                    fontWeight: "500",
+                    color: "var(--text-primary)",
+                    marginBottom: "8px",
+                  }}
+                >
+                  Proof
+                </div>
+                <div
+                  style={{
+                    fontFamily: '"Archivo", sans-serif',
+                    fontSize: "14px",
+                    lineHeight: 1.5,
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Paste a transaction signature to verify what was promised on the screen matched what landed on the chain.
+                </div>
+              </a>
+            </div>
+          </section>
+        </div>
       </div>
-      </PoolHero>
-
-    </div>
+    </PoolHero>
   );
 }
