@@ -108,3 +108,8 @@ default blocked on arrival. Measured at the time: S&P 500 0.01% / 0.03%, Apple 0
 Tesla 0.04% / 0.07%, Palantir 0.54% / 1.48% at $2,000 / $25,000. Palantir is the one that passes a
 1% limit at $2,000 and blocks at $25,000, so it is the default. This is a live market: the default
 can drift, and PRD checks 2 and 3 depend on it.
+
+### Check 8 amended (2026-09-23)
+At 390px "Check an order / Compare stocks / Verify a trade" ran off the screen (Ruler: right edge 543px).
+Nav now reads the full names at > 640px and "Check / Compare / Verify" at <= 640px. Check 8 tests the
+full names at 1440 and the short ones at 390.

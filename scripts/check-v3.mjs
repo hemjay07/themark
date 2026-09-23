@@ -40,7 +40,10 @@ for (const width of [1440, 390]) {
   check(width, 5, /Intel/.test(s.txt) && /S&P 500/.test(s.txt) && /Palantir/.test(s.txt), "company names missing");
   check(width, 6, /extra this order costs/i.test(s.txt) && /your limit/i.test(s.txt), "limit line unlabelled");
   check(width, 7, s.issuerTop !== null && s.keptTop !== null && s.issuerTop < s.keptTop, "issuer powers not above kept-vs-lost");
-  check(width, 8, /Check an order/i.test(s.nav) && /Compare stocks/i.test(s.nav) && /Verify a trade/i.test(s.nav), "nav not renamed");
+  // PRD check 8 as amended: full names on wide screens, one word each on a phone
+  check(width, 8, width === 1440
+    ? /Check an order/i.test(s.nav) && /Compare stocks/i.test(s.nav) && /Verify a trade/i.test(s.nav)
+    : /Check/.test(s.nav) && /Compare/.test(s.nav) && /Verify/.test(s.nav), "nav not renamed");
   check(width, 9, s.route !== null && !s.route.includes("%"), "routing is missing or still shows percentages");
   check(width, 10, width === 1440 ? (s.hero && s.controls && s.controls.left >= s.hero.right - 1) : s.scrollW <= width, width === 1440 ? "not two columns" : "horizontal scroll");
   check(width, 11, !s.gridCanvas, "background grid still present");
