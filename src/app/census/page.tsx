@@ -205,7 +205,7 @@ export default function CensusPage() {
         }
       ` }} />
 
-      <div className="census-kicker">The Mark · Census</div>
+      <div className="census-kicker">Compare stocks</div>
       <h1 className="census-headline">
         {spread
           ? `On the same ${spread.size} order, ${plainName(spread.worstSymbol)} costs ${spread.multiple} what ${plainName(spread.bestSymbol)} does.`

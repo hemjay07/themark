@@ -3,10 +3,11 @@
 import { usePathname } from "next/navigation";
 import type { CSSProperties } from "react";
 
-const ROUTES: Array<{ href: string; label: string }> = [
-  { href: "/", label: "Instrument" },
-  { href: "/census", label: "Census" },
-  { href: "/proof", label: "Proof" },
+// Full names where there is room; one word on a phone, where the full names ran off the screen.
+const ROUTES: Array<{ href: string; label: string; short: string }> = [
+  { href: "/", label: "Check an order", short: "Check" },
+  { href: "/census", label: "Compare stocks", short: "Compare" },
+  { href: "/proof", label: "Verify a trade", short: "Verify" },
 ];
 
 const mono: CSSProperties = {
@@ -63,11 +64,16 @@ export default function Nav() {
                 borderBottomColor: active ? "var(--text-primary)" : "transparent",
               }}
             >
-              {route.label}
+              <span className="nav-full">{route.label}</span>
+              <span className="nav-short">{route.short}</span>
             </a>
           );
         })}
       </div>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .nav-short{display:none}
+        @media (max-width:640px){ .nav-full{display:none} .nav-short{display:inline} }
+      ` }} />
     </nav>
   );
 }

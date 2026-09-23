@@ -15,8 +15,8 @@ interface PoolHeroProps {
 // a dark dashboard with a WebGL sticker. Here the lit surface is the ground the fold sits on.
 export default function PoolHero({ orderShare, fillPct, limitPct, children }: PoolHeroProps) {
   return (
-    <div style={{ position: "relative", width: "100%", isolation: "isolate" }}>
-      <div style={{ position: "absolute", inset: 0, zIndex: 0, overflow: "hidden" }}>
+    <div style={{ position: "relative", width: "100%", minHeight: "100vh", isolation: "isolate", background: "#0A0A0F" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0, overflow: "hidden" }}>
         <PoolWell variant="hero" orderShare={orderShare} fillPct={fillPct} limitPct={limitPct} />
         {/* a scrim so type stays readable over the lit surface without hiding it */}
         <div
@@ -24,7 +24,8 @@ export default function PoolHero({ orderShare, fillPct, limitPct, children }: Po
             position: "absolute",
             inset: 0,
             background:
-              "linear-gradient(180deg, rgba(10,10,15,0.72) 0%, rgba(10,10,15,0.34) 38%, rgba(10,10,15,0.86) 100%)",
+              "linear-gradient(180deg, rgba(10,10,15,0.3) 0%, rgba(10,10,15,0.0) 50%, rgba(10,10,15,0.4) 100%)",
+            pointerEvents: "none",
           }}
         />
       </div>

@@ -3,7 +3,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { reconcileTransaction, type TxReconciliation } from "@/lib/tx";
 import { getIssuerControls, getMintExtensions, getMultiplier, getTransferFeePercentage } from "@/lib/jupiter";
-import { TOKEN_LIST } from "@/lib/tokens";
+import { displayName, TOKEN_LIST } from "@/lib/tokens";
 import type { IssuerControl } from "@/lib/types";
 import Odometer from "@/components/Odometer";
 
@@ -269,22 +269,22 @@ export default function ProofClient({ initialSig }: { initialSig: string | null 
 
   const read = findings.filter((f) => !f.loading && f.controls !== null);
   const anyLoading = findings.some((f) => f.loading);
-  const unreadable = findings.filter((f) => !f.loading && f.controls === null).map((f) => f.symbol);
-  const has = (key: string) => read.filter((f) => f.controls!.some((c) => c.key === key)).map((f) => f.symbol);
+  const unreadable = findings.filter((f) => !f.loading && f.controls === null).map((f) => displayName(f.symbol));
+  const has = (key: string) => read.filter((f) => f.controls!.some((c) => c.key === key)).map((f) => displayName(f.symbol));
   const powerRows = [
     { label: "The issuer can move your tokens", meaning: "They can take tokens out of your wallet without asking you.", tokens: has("permanentDelegate"), tone: "var(--signal)" },
     { label: "The issuer can halt trading", meaning: "Trading can be paused for everyone, with no warning.", tokens: has("pausableConfig"), tone: "var(--signal)" },
     { label: "Custom code runs on every transfer", meaning: "Code the issuer controls can block or change a transfer.", tokens: has("transferHook"), tone: "var(--signal)" },
     { label: "Transfer amounts can be hidden", meaning: "What moved is not always visible on the public record.", tokens: has("confidentialTransferMint"), tone: "var(--signal)" },
     { label: "New accounts start frozen", meaning: "A fresh wallet cannot move the token until the issuer allows it.", tokens: has("defaultAccountState"), tone: "var(--signal)" },
-    { label: "Takes a cut every time it moves", meaning: "A fee comes off each transfer, on top of the price.", tokens: findings.filter((f) => !f.loading && (f.transferFeePct ?? 0) > 0).map((f) => `${f.symbol} ${f.transferFeePct!.toFixed(2)}%`), tone: "var(--signal)" },
-    { label: "Grows your balance instead of paying dividends", meaning: "The number in your wallet drifts up, so it is not the number you bought.", tokens: findings.filter((f) => !f.loading && f.multiplier !== null && f.multiplier !== 1).map((f) => `${f.symbol} +${((f.multiplier! - 1) * 100).toFixed(2)}%`), tone: "var(--text-muted)" },
+    { label: "Takes a cut every time it moves", meaning: "A fee comes off each transfer, on top of the price.", tokens: findings.filter((f) => !f.loading && (f.transferFeePct ?? 0) > 0).map((f) => `${displayName(f.symbol)} ${f.transferFeePct!.toFixed(2)}%`), tone: "var(--signal)" },
+    { label: "Grows your balance instead of paying dividends", meaning: "The number in your wallet drifts up, so it is not the number you bought.", tokens: findings.filter((f) => !f.loading && f.multiplier !== null && f.multiplier !== 1).map((f) => `${displayName(f.symbol)} +${((f.multiplier! - 1) * 100).toFixed(2)}%`), tone: "var(--text-muted)" },
   ];
 
   return (
     <div style={{ minHeight: "100vh", padding: "20px", display: "flex", justifyContent: "center" }}>
       <main style={{ width: "100%", maxWidth: "720px", padding: "32px 0 80px" }}>
-        <div style={microLabel}>proof</div>
+        <div style={microLabel}>verify a trade</div>
 
         <h1 className="proof-h1" style={{ margin: "16px 0 0", color: "var(--text-primary)" }}>
           Did the trade give you what you paid for?

@@ -1,6 +1,7 @@
 "use client";
 
 import { TOKEN_LIST } from "@/lib/tokens";
+import { displayName } from "@/lib/tokens";
 
 interface ControlsSectionProps {
   selectedToken: string;
@@ -31,9 +32,6 @@ export default function ControlsSection({
     <div
       style={{
         width: "100%",
-        maxWidth: "800px",
-        margin: "0 auto",
-        padding: "0 24px 48px",
       }}
     >
       {/* Stock selector chips */}
@@ -73,7 +71,7 @@ export default function ControlsSection({
                   whiteSpace: "nowrap",
                 }}
               >
-                <span>{t.symbol}</span>
+                <span style={{ display: "block", fontFamily: "Archivo, sans-serif", fontSize: "13px", fontWeight: 500 }}>{displayName(t.symbol)}</span>
                 {/* the selected chip shows its cost too; hiding it left the one stock you chose blank */}
                 {(
                   <span
@@ -137,7 +135,7 @@ export default function ControlsSection({
         <div style={{ position: "relative" }}>
           <input
             type="range"
-            min="10"
+            min="100"
             max="25000"
             step="100"
             value={amount}
@@ -163,15 +161,18 @@ export default function ControlsSection({
               fontFamily: '"JetBrains Mono", monospace',
             }}
           >
-            <span>$10</span>
-            <span>$5K</span>
+            <span>$100</span>
+            <span>$12.5K</span>
             <span>$25K</span>
           </div>
+          <p style={{ fontFamily: "Archivo, sans-serif", fontSize: "13px", color: "var(--text-dim)", margin: "10px 0 0" }}>
+            Drag it up to see where this order gets blocked.
+          </p>
         </div>
       </div>
 
       {/* Limit guard input */}
-      <div style={{ marginBottom: "32px" }}>
+      <div>
         <div
           style={{
             fontSize: "12px",

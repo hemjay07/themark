@@ -1,5 +1,7 @@
 "use client";
 
+import { displayName } from "@/lib/tokens";
+
 import type { Token } from "@/lib/types";
 import type { QuoteResult } from "@/lib/types";
 import FillBar from "@/components/FillBar";
@@ -28,8 +30,9 @@ export default function CensusRow({ rank, token, row, sizes, scaleMax }: CensusR
     <div className="cr">
       <div className="cr-head">
         <span className="cr-rank">{rank ? String(rank).padStart(2, "0") : "—"}</span>
-        <span className="cr-symbol">{token.symbol}</span>
-        <span className="cr-name">{token.name}</span>
+        {/* the company is the label; the ticker sits small beside it (PRD-V3 R3) */}
+        <span className="cr-symbol">{displayName(token.symbol)}</span>
+        <span className="cr-name">{token.symbol}</span>
       </div>
       <div className="cr-bars">
         {sizes.map((size) => (

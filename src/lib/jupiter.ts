@@ -147,14 +147,30 @@ export function rateLimitedRecently(withinMs = 20000): boolean {
   return lastRateLimitedAt > 0 && Date.now() - lastRateLimitedAt < withinMs;
 }
 
+// The quote endpoint answers 400 NO_ROUTES_FOUND when no exchange can fill an order of that size. That
+// is a finding about the market, not a failure of this app, so it is kept apart from "unavailable":
+// the page tells the reader no exchange can fill it, instead of going blank.
+export class NoRouteError extends Error {
+  constructor() {
+    super("no exchange can fill this order right now");
+    this.name = "NoRouteError";
+  }
+}
+
 async function fetchWithRetry(url: string, tries = 3): Promise<Response | null> {
   for (let i = 0; i < tries; i++) {
     try {
       const res = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
       if (res.ok) return res;
       if (res.status === 429) lastRateLimitedAt = Date.now();
+      if (res.status === 400) {
+        const body = await res.json().catch(() => ({}));
+        if (body?.errorCode === "NO_ROUTES_FOUND") throw new NoRouteError();
+        return null;
+      }
       if (res.status !== 429 && res.status < 500) return null;
-    } catch {
+    } catch (e) {
+      if (e instanceof NoRouteError) throw e;
       // network error: fall through to the backoff
     }
     await new Promise((r) => setTimeout(r, 350 * Math.pow(2, i)));
@@ -162,13 +178,13 @@ async function fetchWithRetry(url: string, tries = 3): Promise<Response | null> 
   return null;
 }
 
-export async function fetchPrices(mints: string[]): Promise<Record<string, Price>> {
+export async function fetchPrices(mints: string[], background = false): Promise<Record<string, Price>> {
   const params = new URLSearchParams();
   mints.forEach((m) => params.append("ids", m));
 
   try {
     // through this app's own queue, never straight from the browser (see src/app/api/jup/route.ts)
-    const res = await fetchWithRetry(`/api/jup?path=/price/v3&${params}`);
+    const res = await fetchWithRetry(`/api/jup?path=/price/v3&${params}${background ? "&prio=low" : ""}`);
     if (!res) {
       console.warn("Jupiter price unavailable after retries");
       return {};
@@ -188,6 +204,8 @@ export async function fetchPrices(mints: string[]): Promise<Record<string, Price
 export interface QuoteContext {
   price?: Price;
   extensions?: ParsedExtension[] | null;
+  // background work (the stock-chip scan) queues behind a person's own quote and the advice
+  background?: boolean;
 }
 
 export async function getQuote(
@@ -207,7 +225,7 @@ export async function getQuote(
   });
 
   try {
-    const res = await fetchWithRetry(`/api/jup?path=/swap/v1/quote&${params}`);
+    const res = await fetchWithRetry(`/api/jup?path=/swap/v1/quote&${params}${ctx?.background ? "&prio=low" : ""}`);
     if (!res) {
       console.error("Quote unavailable after retries");
       return null;
@@ -325,6 +343,7 @@ export async function getQuote(
       extensions,
     };
   } catch (err) {
+    if (err instanceof NoRouteError) throw err;
     console.error("Quote fetch failed:", err);
     return null;
   }

@@ -69,6 +69,20 @@ export default function LimitLine({
           }}
         />
 
+        {/* The track: the whole scale the bar runs along, so the post, bar and limit read as one
+            instrument instead of three loose marks (PRD-V3 R3) */}
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: "3px",
+            right: 0,
+            height: "12px",
+            background: "var(--border)",
+            borderRadius: "1px",
+          }}
+        />
+
         {/* Cost bar extending right from the post */}
         <div
           style={{
@@ -103,7 +117,7 @@ export default function LimitLine({
 
       </div>
 
-      {/* Labels below the bar: what you keep at the post, your limit under its own line */}
+      {/* Labels (PRD-V3 R3): what the bar is, and where your limit sits */}
       <div
         style={{
           position: "relative",
@@ -116,8 +130,9 @@ export default function LimitLine({
           fontFamily: '"JetBrains Mono", monospace',
         }}
       >
-        <div style={{ position: "absolute", left: 0, top: 12, whiteSpace: "nowrap" }}>
-          you keep: {((amountUsd - costUsd) / amountUsd * 100).toFixed(0)}%
+        <div style={{ position: "absolute", left: 0, top: 12, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "8px" }}>
+          <span aria-hidden style={{ width: "14px", height: "6px", background: barColor, display: "inline-block" }} />
+          extra this order costs
         </div>
         {showLimit && (
           <div
@@ -130,7 +145,7 @@ export default function LimitLine({
               color: "var(--signal)",
             }}
           >
-            your limit: {limitPct.toFixed(2)}%
+            your limit {limitPct.toFixed(2)}%
           </div>
         )}
       </div>

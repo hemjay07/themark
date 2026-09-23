@@ -17,7 +17,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "path not allowed" }, { status: 400 });
   }
   u.searchParams.delete("path");
-  const { status, body } = await jupGet(`${path}?${u.searchParams.toString()}`, "high");
+  // the stock-chip scan marks itself low priority so a person's own quote and the advice run first
+  const priority = u.searchParams.get("prio") === "low" ? "low" : "high";
+  u.searchParams.delete("prio");
+  const { status, body } = await jupGet(`${path}?${u.searchParams.toString()}`, priority);
   return new NextResponse(body, {
     status,
     // whether a key is configured, yes or no; the key itself never leaves the server

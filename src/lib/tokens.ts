@@ -25,3 +25,20 @@ export function getToken(mint: string): Token | undefined {
 export function getTokenBySymbol(symbol: string): Token | undefined {
   return TOKEN_LIST.find((t) => t.symbol.toUpperCase() === symbol.toUpperCase());
 }
+
+// What a person reads. Tickers like INTCx are for machines; the company name is the label, and the
+// ticker sits small beneath it (founder rule: names, not hashes).
+const DISPLAY: Record<string, string> = {
+  SPYx: "S&P 500",
+  AAPLx: "Apple",
+  TSLAx: "Tesla",
+  INTCx: "Intel",
+  PLTRx: "Palantir",
+  tOpenAI: "OpenAI",
+  tKalshi: "Kalshi",
+  tSpaceX: "SpaceX",
+};
+
+export function displayName(symbol: string): string {
+  return DISPLAY[symbol] ?? symbol;
+}
