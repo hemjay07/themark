@@ -40,6 +40,10 @@ bans:
   - "no figure on the surface that was not returned by a call made in that moment: no sample data, no placeholder price, no remembered number"
   - "no chart of the gap between the token and the share: it is 0.20% median and fourteen other teams in this hackathon are drawing it"
   - "no green arrow, no confetti, no celebration of a trade: the product's whole claim is that it tells you the cost"
+# Exception to ban 1, decided 2026-09-23: on the free Jupiter key (1 request a second) a per-visitor
+# census took ~26s to fill. The founder chose not to pay for a higher plan, so /census shows ONE shared
+# reading rebuilt at most every two minutes, with its age printed on the page. Every figure is still the
+# answer to a live call; the instrument on / stays live per order.
 byte_budget_kb: 900
 surfaces:
   - route: "/"

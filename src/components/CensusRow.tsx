@@ -7,7 +7,7 @@ import type { SizeSpec } from "@/lib/censusSizes";
 
 export type CellState =
   | { status: "pending" }
-  | { status: "ok"; quote: QuoteResult }
+  | { status: "ok"; quote: Pick<QuoteResult, "fillCostPct"> }
   | { status: "error"; message: string };
 
 export type RowState = Partial<Record<string, CellState>>;

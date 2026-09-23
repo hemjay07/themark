@@ -1,62 +1,14 @@
 import { NextResponse } from "next/server";
+import { jupGet, jupHeaders, KEY, UPSTREAM } from "@/lib/jupServer";
 
 export const dynamic = "force-dynamic";
 
-// Every browser tab used to call lite-api.jup.ag directly, in bursts, and the public endpoint
-// throttled us into "no read" rows, an empty fold, and a /proof demo that ended in "refusing to
-// reconcile". All Jupiter reads now come through here: identical requests that are already in flight
-// share one upstream call, at most two upstream calls run at once, and a 429 is retried with backoff
-// before anything is reported as missing. Nothing is cached after it resolves: a number is still only
-// ever the answer to a call made in that moment.
-// lite-api.jup.ag is being throttled down until it is retired (developers.jup.ag/docs/portal/migration.md).
-// api.jup.ag is the same API: 30 req/min with no key, 60 on the free key, 600 on the $25 plan.
-// The key is read server-side and never reaches a browser.
-const UPSTREAM = "https://api.jup.ag";
-const KEY = process.env.JUPITER_API_KEY;
+// The browser never calls Jupiter directly. Every read comes through here and through the shared,
+// paced queue in src/lib/jupServer.ts, so a burst from one page can't trip the plan's rate limit, and a
+// person's own quote always runs ahead of the background census refresh. Nothing is cached after a call
+// resolves: a number shown for an order is the answer to a call made for it.
 const ALLOWED = ["/swap/v1/quote", "/price/v3", "/tokens/v2/search"];
 const ALLOWED_POST = ["/swap/v1/swap"];
-const headers = (): Record<string, string> => ({
-  Accept: "application/json",
-  ...(KEY ? { "x-api-key": KEY } : {}),
-});
-const MAX_CONCURRENT = 2;
-
-const inflight = new Map<string, Promise<{ status: number; body: string }>>();
-let active = 0;
-const waiters: Array<() => void> = [];
-
-async function slot() {
-  if (active < MAX_CONCURRENT) {
-    active++;
-    return;
-  }
-  await new Promise<void>((r) => waiters.push(r));
-  active++;
-}
-function release() {
-  active--;
-  waiters.shift()?.();
-}
-
-async function upstream(url: string): Promise<{ status: number; body: string }> {
-  await slot();
-  try {
-    let last = { status: 502, body: '{"error":"upstream unreachable"}' };
-    for (let i = 0; i < 5; i++) {
-      try {
-        const res = await fetch(url, { headers: headers(), cache: "no-store" });
-        last = { status: res.status, body: await res.text() };
-        if (res.status !== 429 && res.status < 500) return last;
-      } catch {
-        // network error: retry
-      }
-      await new Promise((r) => setTimeout(r, 400 * Math.pow(2, i)));
-    }
-    return last;
-  } finally {
-    release();
-  }
-}
 
 export async function GET(request: Request) {
   const u = new URL(request.url);
@@ -65,14 +17,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "path not allowed" }, { status: 400 });
   }
   u.searchParams.delete("path");
-  const target = `${UPSTREAM}${path}?${u.searchParams.toString()}`;
-
-  let p = inflight.get(target);
-  if (!p) {
-    p = upstream(target).finally(() => inflight.delete(target));
-    inflight.set(target, p);
-  }
-  const { status, body } = await p;
+  const { status, body } = await jupGet(`${path}?${u.searchParams.toString()}`, "high");
   return new NextResponse(body, {
     status,
     // whether a key is configured, yes or no; the key itself never leaves the server
@@ -90,7 +35,7 @@ export async function POST(request: Request) {
   const body = await request.text();
   const res = await fetch(`${UPSTREAM}${path}`, {
     method: "POST",
-    headers: { ...headers(), "Content-Type": "application/json" },
+    headers: { ...jupHeaders(), "Content-Type": "application/json" },
     body,
     cache: "no-store",
   });

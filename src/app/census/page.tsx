@@ -1,16 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getQuote, fetchPrices, getMintExtensions, rateLimitedRecently } from "@/lib/jupiter";
-import { TOKEN_LIST, USDC_MINT } from "@/lib/tokens";
+import { TOKEN_LIST } from "@/lib/tokens";
 import { CENSUS_SIZES } from "@/lib/censusSizes";
 import CensusRow, { type CellState, type RowState } from "@/components/CensusRow";
 import PoolBand from "@/components/PoolBand";
 
-// 24 quotes fired strictly one after another, each of them three network calls, left the page
-// still reading after several seconds. They run through a small pool instead: fast enough to be
-// populated when a judge looks at it, small enough not to trip Jupiter's rate limit.
-const CONCURRENCY = 3;
 const ROW_SLOT = 160;
 
 // "Intel xStock" -> "Intel", "T-OpenAI" -> "OpenAI": the headline names companies, not tickers.
@@ -24,61 +19,44 @@ export default function CensusPage() {
   const [lastRead, setLastRead] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  // One shared reading, refreshed on the server every two minutes (see src/app/api/census/route.ts).
+  // Poll fast until the first complete reading exists, then slowly to pick up each refresh.
+  const [readAtMs, setReadAtMs] = useState<number | null>(null);
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
-
-    async function run() {
-      // One price call for every token, then one mint read per token, then the three quotes.
-      // Previously each of the 24 cells refetched both, which was 72 calls and rate-limited us
-      // into "no read" across the whole page.
-      const mints = TOKEN_LIST.map((t) => t.mint);
-      const prices = await fetchPrices(mints);
-      if (cancelled) return;
-
-      const tokens = [...TOKEN_LIST];
-      let nextToken = 0;
-      const worker = async () => {
-        while (!cancelled) {
-          const ti = nextToken++;
-          if (ti >= tokens.length) return;
-          const token = tokens[ti];
-          const price = prices[token.mint];
-          const extensions = await getMintExtensions(token.mint);
-          if (cancelled) return;
-
-          for (const size of CENSUS_SIZES) {
-            if (cancelled) return;
-            let cell: CellState;
-            try {
-              const q = await getQuote(USDC_MINT, token.mint, size.amountIn, 50, { price, extensions });
-              cell = q
-                ? { status: "ok", quote: q }
-                : {
-                    status: "error",
-                    message: rateLimitedRecently()
-                      ? "Jupiter is rate-limiting this address"
-                      : "no live quote returned",
-                  };
-            } catch {
-              cell = { status: "error", message: "quote call failed" };
-            }
-            if (cancelled) return;
-            setRows((prev) => ({
-              ...prev,
-              [token.mint]: { ...prev[token.mint], [size.key]: cell },
-            }));
-            if (cell.status === "ok") setLastRead(new Date().toISOString());
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      let complete = false;
+      try {
+        const res = await fetch("/api/census", { cache: "no-store" });
+        const data = await res.json();
+        if (cancelled) return;
+        const next: Record<string, RowState> = {};
+        for (const [mint, sizes] of Object.entries(data.cells as Record<string, Record<string, any>>)) {
+          next[mint] = {};
+          for (const [key, c] of Object.entries(sizes)) {
+            next[mint]![key] = c.ok
+              ? { status: "ok", quote: { fillCostPct: c.pct } }
+              : { status: "error", message: c.reason };
           }
         }
-      };
-
-      await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-      if (!cancelled) setDone(true);
-    }
-
-    run();
+        setRows(next);
+        complete = Boolean(data.complete);
+        setDone(complete);
+        setReadAtMs(data.readAt);
+        if (data.readAt) setLastRead(new Date(data.readAt).toISOString());
+      } catch {
+        // keep whatever reading is on screen; its age keeps counting, so it never passes as fresh
+      }
+      if (!cancelled) timer = setTimeout(poll, complete ? 30000 : 2500);
+    };
+    poll();
+    const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
+      clearInterval(tick);
     };
   }, []);
 
@@ -154,9 +132,6 @@ export default function CensusPage() {
 
 
 
-  const readAt = lastRead
-    ? new Date(lastRead).toLocaleTimeString(undefined, { hour12: false })
-    : null;
 
   return (
     <>
@@ -245,14 +220,10 @@ export default function CensusPage() {
 
       <div className="census-status">
         <span className="census-dot" data-done={done} />
-        <span>live · last read </span>
-        {/* readAt is a clock string read from a live call, not from the server's clock: server
-            and first client paint both show the placeholder, so hydration never sees the two
-            disagree. suppressHydrationWarning covers the one moment they intentionally diverge:
-            the instant the first live read lands. */}
-        <span suppressHydrationWarning>{readAt ?? "--:--:--"}</span>
-        <span className="census-all" data-visible={done}>
-          {" "}· all rows read
+        <span suppressHydrationWarning>
+          {readAtMs && now
+            ? `read live ${Math.max(0, Math.round((now - readAtMs) / 1000))}s ago · every 2 min`
+            : "taking the first reading now"}
         </span>
       </div>
 
