@@ -27,6 +27,7 @@ for (const width of [1440, 390]) {
       useBtn: document.querySelector("[data-use-amount]")?.innerText ?? null,
       advice: r("[data-advice]"),
       controls: r("[data-controls]"),
+      action: r("[data-action]"),
       legBar: r("[data-legend-bar]"),
       legLimit: r("[data-legend-limit]"),
       chipDots: [...document.querySelectorAll("[data-controls] button")].filter((b) => /…/.test(b.innerText)).length,
@@ -34,8 +35,9 @@ for (const width of [1440, 390]) {
   });
   // 1. opens on a blocked order, and the best advice carries a button
   check(width, 1, s.refusal && s.useBtn && /^Use \$/.test(s.useBtn.trim()), "does not open blocked with a 'Use $X' button");
-  // 2. phone: the advice comes before the controls, and starts within the first two screens
-  if (width === 390) check(width, 2, s.advice && s.controls && s.advice.top < s.controls.top && s.advice.top < 1800, "advice not before controls on a phone");
+  // 2. phone, as amended by ASSESS-5 (design/PRD-V3.md): what you set, then placing it, then the
+  // alternatives, in that order, so the page reads input to outcome
+  if (width === 390) check(width, 2, s.advice && s.controls && s.action && s.controls.top < s.action.top && s.action.top < s.advice.top, "phone order is not controls, action, advice");
   // 3. the two labels under the line do not overlap
   check(width, 3, s.legBar && s.legLimit && (s.legBar.right <= s.legLimit.left || s.legBar.bottom <= s.legLimit.top || s.legLimit.bottom <= s.legBar.top), "legend labels overlap");
   // 4. the name is used, and the block stamps the line

@@ -16,7 +16,12 @@ interface ControlsSectionProps {
 }
 
 // Controls visible on the first screen: stock chips, amount slider, limit input.
-const CHIP_CSS = "@keyframes chip-pulse{0%,100%{opacity:.15}50%{opacity:.5}}";
+const CHIP_CSS = `@keyframes chip-pulse{0%,100%{opacity:.15}50%{opacity:.5}}
+.ctl-hint{font-family:Archivo,sans-serif;font-size:13px;line-height:1.45;color:var(--text-dim);margin:10px 0 0}
+.ctl-affix{position:relative}
+.ctl-affix::before{content:attr(data-prefix);position:absolute;left:12px;top:50%;transform:translateY(-50%);
+  font-family:"JetBrains Mono",monospace;font-size:16px;color:var(--text-dim);pointer-events:none}
+.ctl-affix.is-suffix::before{content:attr(data-suffix);left:auto;right:14px}`;
 
 export default function ControlsSection({
   selectedToken,
@@ -30,6 +35,7 @@ export default function ControlsSection({
   blocked,
 }: ControlsSectionProps) {
   const amountNum = parseFloat(amount) || 5000;
+  const amountLabel = `$${Math.round(amountNum).toLocaleString("en-US")}`;
   const fillPercent = ((amountNum - 10) / (25000 - 10)) * 100;
 
   return (
@@ -51,7 +57,7 @@ export default function ControlsSection({
             fontFamily: '"JetBrains Mono", monospace',
           }}
         >
-          pick a stock
+          <span className="step-n">1</span>pick a stock
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
           {TOKEN_LIST.map((t) => {
@@ -103,6 +109,7 @@ export default function ControlsSection({
             );
           })}
         </div>
+        <p className="ctl-hint">Each % is what {amountLabel} of that stock costs you extra, right now.</p>
       </div>
 
       {/* Amount selector with slider */}
@@ -117,8 +124,9 @@ export default function ControlsSection({
             fontFamily: '"JetBrains Mono", monospace',
           }}
         >
-          how much to spend
+          <span className="step-n">2</span>how much to spend
         </div>
+        <div className="ctl-affix" data-prefix="$">
         <input
           type="number"
           value={amount}
@@ -135,10 +143,12 @@ export default function ControlsSection({
             color: "var(--text-primary)",
             fontFamily: '"JetBrains Mono", monospace',
             fontSize: "16px",
-            marginBottom: "16px",
+            paddingLeft: "28px",
             boxSizing: "border-box",
           }}
         />
+        </div>
+        <div style={{ height: "16px" }} />
         <div style={{ position: "relative" }}>
           <input
             type="range"
@@ -190,8 +200,9 @@ export default function ControlsSection({
             fontFamily: '"JetBrains Mono", monospace',
           }}
         >
-          block the trade if I overpay more than (%)
+          <span className="step-n">3</span>your limit
         </div>
+        <div className="ctl-affix is-suffix" data-suffix="%">
         <input
           type="number"
           min="0"
@@ -208,9 +219,12 @@ export default function ControlsSection({
             borderRadius: "4px",
             color: "var(--text-primary)",
             fontFamily: '"JetBrains Mono", monospace',
+            paddingRight: "34px",
             boxSizing: "border-box",
           }}
         />
+        </div>
+        <p className="ctl-hint">Block the trade if it costs more than this share of what you spend.</p>
       </div>
     </div>
   );

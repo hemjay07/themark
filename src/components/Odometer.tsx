@@ -21,7 +21,8 @@ export default function Odometer({
   style,
 }: OdometerProps) {
   const format = useCallback(
-    (n: number) => `${prefix}${n.toFixed(decimals)}${suffix}`,
+    (n: number) =>
+      `${prefix}${n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}${suffix}`,
     [prefix, suffix, decimals]
   );
   const ref = useOdometerRef<HTMLSpanElement>(value, format, durationMs);

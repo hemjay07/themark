@@ -9,7 +9,19 @@ export type { ParsedExtension } from "./types";
 // Returns null when the read FAILED, and an array when it succeeded. The two are different
 // facts: an empty array means the mint carries no extensions, null means nobody knows.
 // Collapsing both to [] let the surface print "no transfer fee" about a call that never answered.
-export async function getMintExtensions(mint: string): Promise<ParsedExtension[] | null> {
+// The page and the quote ask for the same mint at the same moment; while one read is in flight the
+// other shares it. Nothing is kept once it settles, so every later read is fresh.
+const mintInflight = new Map<string, Promise<ParsedExtension[] | null>>();
+
+export function getMintExtensions(mint: string): Promise<ParsedExtension[] | null> {
+  const existing = mintInflight.get(mint);
+  if (existing) return existing;
+  const p = readMintExtensions(mint).finally(() => mintInflight.delete(mint));
+  mintInflight.set(mint, p);
+  return p;
+}
+
+async function readMintExtensions(mint: string): Promise<ParsedExtension[] | null> {
   try {
     const res = await fetch(`/api/mint?mint=${encodeURIComponent(mint)}`, {
       headers: { Accept: "application/json" },
@@ -229,6 +241,21 @@ export async function getQuote(
   });
 
   try {
+    // The quote, the price and the mint read do not depend on each other, so they run together:
+    // one after another they put ~3 s between the quote arriving and the number showing.
+    const priority = ctx?.background ? true : ctx?.advice ? "mid" : false;
+    const pricePromise = ctx?.price
+      ? Promise.resolve(ctx.price)
+      : fetchPrices([outputMint], priority).then((p) => p[outputMint]);
+    // The multiplier comes from the price response itself; the transfer fee needs the mint account.
+    const extPromise =
+      ctx && Object.prototype.hasOwnProperty.call(ctx, "extensions")
+        ? Promise.resolve(ctx.extensions ?? null)
+        : getMintExtensions(outputMint);
+    // an unhandled rejection from a side read must not surface while the quote is still in flight
+    pricePromise.catch(() => undefined);
+    extPromise.catch(() => null);
+
     const res = await fetchWithRetry(`/api/jup?path=/swap/v1/quote&${params}${ctx?.background ? "&prio=low" : ctx?.advice ? "&prio=mid" : ""}`);
     if (!res) {
       console.error("Quote unavailable after retries");
@@ -236,25 +263,13 @@ export async function getQuote(
     }
 
     const quoteData = await res.json();
-
-    // Fetch prices to get reference price, unless the caller already read it this pass
-    let price = ctx?.price;
-    if (!price) {
-      // a fallback price read inherits the priority of whatever asked for the quote
-      const prices = await fetchPrices([outputMint], ctx?.background ? true : ctx?.advice ? "mid" : false);
-      price = prices[outputMint];
-    }
+    const [price, extensions] = await Promise.all([pricePromise, extPromise]);
 
     if (!price) {
       console.error("Could not fetch price for reference");
       return null;
     }
 
-    // The multiplier comes from the price response itself; the transfer fee needs the mint account.
-    const extensions =
-      ctx && Object.prototype.hasOwnProperty.call(ctx, "extensions")
-        ? ctx.extensions ?? null
-        : await getMintExtensions(outputMint);
     // A mint read that fails must not silently drop a real 20 bps out of the cost, but it must
     // not kill the quote either: the public RPC rate-limits constantly, and refusing every quote
     // made the product unusable and printed "no read" across the whole census. The fee is carried

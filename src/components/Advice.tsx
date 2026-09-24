@@ -15,6 +15,8 @@ interface AdviceProps {
   costByToken: Record<string, number | null>;
   // one click from a refusal to a placeable order: sets the amount the advice found
   onUseAmount?: (usd: number) => void;
+  // the size that passed, reported up so the page can offer it where the order is placed
+  onLead?: (usd: number | null) => void;
 }
 
 type Option = { key: string; text: string; useAmount?: number; saving?: string };
@@ -26,11 +28,15 @@ const usd = (n: number) =>
 // Every dollar figure here is the answer to a quote made after the main quote landed; nothing is
 // estimated onto the screen. The "buy less" amount is estimated, then CHECKED with a live quote, and
 // only shown if the check passes. (design/PRD-V3.md R2)
-export default function Advice({ symbol, amountUsd, limitPct, blocked, noRoute, quote, costByToken, onUseAmount }: AdviceProps) {
+export default function Advice({ symbol, amountUsd, limitPct, blocked, noRoute, quote, costByToken, onUseAmount, onLead }: AdviceProps) {
   const [split, setSplit] = useState<Option | null>(null);
   const [less, setLess] = useState<Option | null>(null);
   const [checking, setChecking] = useState(false);
   const name = displayName(symbol);
+  useEffect(() => {
+    onLead?.(less?.useAmount ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [less]);
   const mint = getTokenBySymbol(symbol)?.mint;
 
   useEffect(() => {
@@ -144,66 +150,65 @@ export default function Advice({ symbol, amountUsd, limitPct, blocked, noRoute, 
   const options = [less, split, compare].filter((o): o is Option => o !== null);
 
   return (
-    <section
-      data-advice
-      style={{
-        border: `1px solid ${blocked ? "var(--signal)" : "var(--border)"}`,
-        borderRadius: "8px",
-        padding: "20px 22px",
-        background: blocked ? "rgba(196, 38, 29, 0.05)" : "var(--surface)",
-        // a blocked order fills in three live answers; reserve their height so the page below does not jump
-        minHeight: blocked ? "250px" : "132px",
-      }}
-    >
-      <h2 style={{ fontFamily: "Archivo, sans-serif", fontWeight: 500, fontSize: "18px", color: "var(--text-primary)", margin: "0 0 12px" }}>
-        {blocked ? "What you can do instead" : "Ways to pay less"}
-      </h2>
-      {options.length ? (
-        <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "10px" }}>
-          {options.map((o) => (
-            <li key={o.key} style={{ fontFamily: "Archivo, sans-serif", fontSize: "15px", lineHeight: 1.5, color: "var(--text-primary)", paddingLeft: "16px", position: "relative" }}>
-              <span aria-hidden style={{ position: "absolute", left: 0, top: "0.55em", width: "6px", height: "6px", borderRadius: "1px", background: blocked ? "var(--signal)" : "var(--text-dim)" }} />
-              {o.saving && (
-                <span style={{ display: "block", fontFamily: '"JetBrains Mono", monospace', fontSize: "22px", fontWeight: 600, color: "var(--success)", marginBottom: "4px" }}>
-                  {o.saving}
-                </span>
-              )}
-              {o.text}
+    <section data-advice className={`ad${blocked ? " is-blocked" : ""}`}>
+      <style dangerouslySetInnerHTML={{ __html: ADVICE_CSS }} />
+      <h2 className="ad-h">{blocked ? "What you can do instead" : "Ways to pay less"}</h2>
+      {options.length > 0 && (
+        <ul className="ad-list">
+          {options.map((o, i) => (
+            <li key={o.key} className={`ad-stub${o.useAmount ? " is-lead" : ""}`} style={{ animationDelay: `${i * 90}ms` }}>
+              {o.saving && <span className="ad-save">{o.saving}</span>}
+              <span className="ad-text">{o.text}</span>
               {o.useAmount && onUseAmount && (
-                <button
-                  data-use-amount
-                  onClick={() => onUseAmount(o.useAmount!)}
-                  style={{
-                    display: "block",
-                    marginTop: "10px",
-                    padding: "10px 16px",
-                    borderRadius: "6px",
-                    border: "1px solid var(--text-primary)",
-                    background: "var(--text-primary)",
-                    color: "var(--bg)",
-                    fontFamily: "Archivo, sans-serif",
-                    fontSize: "14px",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  Use {usd(o.useAmount)}
+                <button data-use-amount className="ad-use" onClick={() => onUseAmount(o.useAmount!)}>
+                  Use {usd(o.useAmount)} <span aria-hidden>→</span>
                 </button>
               )}
             </li>
           ))}
         </ul>
-      ) : null}
+      )}
       {checking && (
-        <p style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: "12px", color: "var(--text-dim)", margin: options.length ? "12px 0 0" : 0 }}>
-          checking other ways to buy this, live…
-        </p>
+        <div className="ad-wait" aria-label="checking other ways to buy this, live">
+          <span className="ad-bar" />
+          <span className="ad-bar short" />
+          <span className="ad-note">checking other ways to buy this, live</span>
+        </div>
       )}
       {!checking && !options.length && (quote || noRoute) && (
-        <p style={{ fontFamily: "Archivo, sans-serif", fontSize: "14px", color: "var(--text-dim)", margin: 0 }}>
-          Nothing cheaper found for this order right now.
-        </p>
+        <p className="ad-none">Nothing cheaper found for this order right now.</p>
       )}
     </section>
   );
 }
+
+// A blocked order fills in up to three live answers; the section reserves their height so the page
+// does not jump, and each answer slides in toward the ticket as it lands.
+const ADVICE_CSS = `
+.ad{min-height:132px}.ad.is-blocked{min-height:250px}
+.ad-h{font-family:Archivo,sans-serif;font-weight:600;font-size:20px;color:var(--text-primary);margin:0 0 14px}
+.ad-list{list-style:none;padding:0;margin:0;display:grid;gap:12px}
+.ad-stub{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:16px 18px 16px 22px;font-family:Archivo,sans-serif;font-size:15px;line-height:1.5;color:var(--text-primary);
+  animation:ad-in 420ms cubic-bezier(.2,.8,.2,1) both}
+.ad-stub::before{content:"";position:absolute;left:-1px;top:14px;bottom:14px;width:3px;border-radius:2px;background:var(--text-dim)}
+.ad-stub.is-lead{border-color:rgba(11,122,59,.55);background:linear-gradient(180deg,rgba(11,122,59,.10),rgba(11,122,59,.03))}
+.ad-stub.is-lead::before{background:var(--success)}
+.ad-save{display:block;font-family:"JetBrains Mono",monospace;font-size:20px;font-weight:600;color:#3DBE74;margin-bottom:4px}
+.ad-text{display:block;color:var(--text-muted)}
+.ad-use{margin-top:12px;padding:11px 18px;border-radius:6px;border:none;background:#3DBE74;color:#06140C;
+  font-family:Archivo,sans-serif;font-size:15px;font-weight:700;cursor:pointer;
+  transition:transform 120ms ease-out,filter 160ms ease-out}
+.ad-use:hover{transform:translateX(3px);filter:brightness(1.08)}
+.ad-use:active{transform:scale(.97)}
+.ad-wait{display:grid;gap:8px;margin-top:12px}
+.ad-bar{display:block;height:14px;border-radius:4px;width:100%;background:var(--surface);position:relative;overflow:hidden}
+.ad-bar::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,#1E1E28,transparent);
+  transform:translateX(-100%);animation:ad-shine 1.1s linear infinite}
+.ad-bar.short{width:62%}
+.ad-note{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--text-dim)}
+.ad-none{font-family:Archivo,sans-serif;font-size:14px;color:var(--text-dim);margin:0}
+@keyframes ad-in{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
+@keyframes ad-shine{to{transform:translateX(100%)}}
+@media (prefers-reduced-motion:reduce){.ad-stub,.ad-bar::after{animation:none!important}}
+`;

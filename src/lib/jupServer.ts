@@ -17,7 +17,9 @@ export const jupHeaders = (): Record<string, string> => ({
 
 // Three lanes. A visitor's own quote must never wait behind anyone's advice checks, or a second
 // visitor sees an empty page while the first visitor's advice runs.
-type Job = () => void;
+// a job carries the signal of the page that asked for it: if that page has gone, the job is dropped
+// without spending a slot, so a closed tab's background checks never delay the next visitor
+type Job = { run: () => void; signal?: AbortSignal };
 export type Priority = "high" | "mid" | "low";
 const high: Job[] = [];
 const mid: Job[] = [];
@@ -34,19 +36,24 @@ function pump() {
       pumping = false;
       return;
     }
+    if (job.signal?.aborted) {
+      job.run();
+      tick();
+      return;
+    }
     const wait = Math.max(0, lastStart + SPACING_MS - Date.now());
     setTimeout(() => {
-      lastStart = Date.now();
-      job();
+      if (!job.signal?.aborted) lastStart = Date.now();
+      job.run();
       tick();
     }, wait);
   };
   tick();
 }
 
-function slot(priority: Priority): Promise<void> {
+function slot(priority: Priority, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
-    (priority === "high" ? high : priority === "mid" ? mid : low).push(resolve);
+    (priority === "high" ? high : priority === "mid" ? mid : low).push({ run: resolve, signal });
     pump();
   });
 }
@@ -56,15 +63,19 @@ const inflight = new Map<string, Promise<{ status: number; body: string }>>();
 
 export function jupGet(
   pathAndQuery: string,
-  priority: Priority = "high"
+  priority: Priority = "high",
+  signal?: AbortSignal
 ): Promise<{ status: number; body: string }> {
   const url = `${UPSTREAM}${pathAndQuery}`;
-  const existing = inflight.get(url);
+  // only a person's own quote is shared between requests; background work is per page, so it can be
+  // dropped with that page
+  const existing = signal ? undefined : inflight.get(url);
   if (existing) return existing;
   const p = (async () => {
     let last = { status: 502, body: '{"error":"upstream unreachable"}' };
     for (let i = 0; i < 4; i++) {
-      await slot(priority);
+      await slot(priority, signal);
+      if (signal?.aborted) return { status: 499, body: '{"error":"the page that asked for this has gone"}' };
       try {
         const res = await fetch(url, { headers: jupHeaders(), cache: "no-store" });
         last = { status: res.status, body: await res.text() };
@@ -74,7 +85,9 @@ export function jupGet(
       }
     }
     return last;
-  })().finally(() => inflight.delete(url));
-  inflight.set(url, p);
-  return p;
+  })();
+  if (signal) return p;
+  const shared = p.finally(() => inflight.delete(url));
+  inflight.set(url, shared);
+  return shared;
 }

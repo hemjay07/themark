@@ -4,15 +4,13 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getQuote, getSwapTransaction, fetchPrices, rateLimitedRecently, NoRouteError, getMintExtensions } from "@/lib/jupiter";
 import { reconcileTransaction } from "@/lib/tx";
-import { TOKEN_LIST, getTokenBySymbol, USDC_MINT, getToken } from "@/lib/tokens";
+import { TOKEN_LIST, getTokenBySymbol, USDC_MINT, getToken, displayName } from "@/lib/tokens";
 import type { ParsedExtension, QuoteResult } from "@/lib/types";
-import Odometer from "@/components/Odometer";
-import HeroSection from "@/components/HeroSection";
+import TradeTicket from "@/components/TradeTicket";
 import ControlsSection from "@/components/ControlsSection";
-import KeptVsLost from "@/components/KeptVsLost";
 import Advice from "@/components/Advice";
-import IssuerSummary from "@/components/IssuerSummary";
-import PoolDrain from "@/components/PoolDrain";
+
+const usd0 = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
 export default function Home() {
   const [amount, setAmount] = useState("25000");
@@ -26,6 +24,8 @@ export default function Home() {
   const [initialized, setInitialized] = useState(false);
   const [signing, setSigning] = useState(false);
   const [settling, setSettling] = useState(false);
+  // the size the advice found that passes, offered again where the order is placed
+  const [lead, setLead] = useState<number | null>(null);
   const [costByToken, setCostByToken] = useState<Record<string, number | null>>({});
   // no exchange can fill this size right now: a finding, shown as one (PRD-V3 R2b)
   const [noRoute, setNoRoute] = useState(false);
@@ -56,6 +56,10 @@ export default function Home() {
       }
     };
     checkConnection();
+    // the top bar's wallet button connects too; it announces it so this page knows
+    const onWallet = () => setConnected(true);
+    window.addEventListener("mark:wallet", onWallet);
+    return () => window.removeEventListener("mark:wallet", onWallet);
   }, []);
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -218,10 +222,31 @@ export default function Home() {
       const limit = Number.isFinite(worstFillPct) ? worstFillPct : 0;
       const bps = Math.max(1, Math.min(5000, Math.round(limit * 100)));
 
-      const prices = await fetchPrices(TOKEN_LIST.map((t) => t.mint), true);
+      // At a size the census measures, its shared reading (two minutes old at most, same measure)
+      // fills the chips without eight more quotes on a one-request-a-second key. Only the stocks it
+      // could not read are quoted here.
+      let todo = TOKEN_LIST;
+      if (["500", "5000", "25000"].includes(String(amt))) {
+        try {
+          const census = await fetch("/api/census").then((r) => (r.ok ? r.json() : null));
+          if (cancelled) return;
+          const read: Record<string, number> = {};
+          for (const t of TOKEN_LIST) {
+            const cell = census?.cells?.[t.mint]?.[String(amt)];
+            if (cell?.ok && typeof cell.pct === "number") read[t.symbol] = cell.pct;
+          }
+          setCostByToken((prev) => ({ ...prev, ...read }));
+          todo = TOKEN_LIST.filter((t) => !(t.symbol in read));
+        } catch {
+          // the census could not be read: quote every stock instead
+        }
+      }
+      if (!todo.length) return;
+
+      const prices = await fetchPrices(todo.map((t) => t.mint), true);
       if (cancelled) return;
 
-      for (const t of TOKEN_LIST) {
+      for (const t of todo) {
         if (cancelled) return;
         try {
           const q = await getQuote(USDC_MINT, t.mint, lamports, bps, { price: prices[t.mint], background: true });
@@ -250,6 +275,7 @@ export default function Home() {
     try {
       await phantom.connect();
       setConnected(true);
+      window.dispatchEvent(new Event("mark:wallet"));
       setError("");
     } catch (err) {
       console.error("Connect failed:", err);
@@ -257,61 +283,79 @@ export default function Home() {
     }
   };
 
-  // allInCostPct is ALREADY measured against the share: it is
-  // (paid - unitsReceived x sharePrice) / paid. Deducting the token/share basis a second time
-  // inverted the sign and made the fold claim a discount while the axis above it showed a cost.
-  const netPercent = quote ? quote.allInCostPct : 0;
-  const isBelow = netPercent < 0;
-
-  const card: React.CSSProperties = {
-    background: "var(--surface)",
-    border: "1px solid var(--border)",
-    borderRadius: "8px",
-    padding: "20px",
-  };
   const routeNames = (() => {
     const plan = (quote?.raw as any)?.routePlan;
     if (!Array.isArray(plan)) return [];
     const names = plan.map((l: any) => String(l?.swapInfo?.label ?? "").replace(/\s+(CLMM|CPMM|AMM|DLMM|V\d+)$/i, "").trim()).filter(Boolean);
     return [...new Set(names)] as string[];
   })();
-  const joinNames = (a: string[]) => (a.length <= 1 ? a.join("") : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`);
+
+  // the ticket's foot is the verdict; the action it leads to is step 4, beside the controls
+  const foot = shouldRefuse && (quote || noRoute) ? (
+    <div data-refusal className="tk-refusal">
+      {noRoute || !quote
+        ? "Not placed. No exchange can fill this order right now."
+        : limitIsSet
+          ? `Not placed. ${quote.fillCostPct.toFixed(2)}% is over your ${effectiveLimit.toFixed(2)}% limit.`
+          : "Not placed. Set your limit in step 3."}
+    </div>
+  ) : quote ? (
+    <div className="tk-ok">Within your {effectiveLimit.toFixed(2)}% limit</div>
+  ) : null;
+
+  const action = (
+    <div className="v3-card v3-act" data-action>
+      <div className="v3-act-label"><span className="step-n">4</span>place the order</div>
+      {shouldRefuse && (quote || noRoute) ? (
+        lead ? (
+          <>
+            <p className="v3-act-blocked">
+              Blocked at this size. {usd0(lead)} of {displayName(selectedToken)} stays under your limit.
+            </p>
+            <button data-use-amount className="tk-place v3-lead" onClick={() => setAmount(String(lead))}>
+              Use {usd0(lead)} instead
+            </button>
+          </>
+        ) : (
+          <p className="v3-act-blocked">
+            Blocked. {noRoute ? "No exchange can fill it." : "It costs more than your limit."} Checking for a size that fits…
+          </p>
+        )
+      ) : quote ? (
+        <button onClick={connected ? handleSign : handleConnect} disabled={signing || settling} className="tk-place">
+          {!connected ? "Connect a wallet to place this order" : signing ? "Signing…" : settling ? "Waiting for the chain…" : "Place this order"}
+        </button>
+      ) : (
+        <p className="v3-act-blocked">Waiting for a live price.</p>
+      )}
+    </div>
+  );
 
   return (
     <div style={{ width: "100%", minHeight: "100vh" }}>
-      {/* two columns at >= 1100px, one below (PRD-V3 R6). dangerouslySetInnerHTML so React never
-          escapes the ">" in a selector between server and client. */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        .v3-grid{max-width:1240px;margin:0 auto;padding:56px 24px 40px;display:grid;gap:40px;
-          grid-template-columns:1fr;grid-template-areas:"hero" "advice" "controls"}
-        .v3-hero{grid-area:hero}.v3-controls{grid-area:controls}.v3-advice{grid-area:advice}
-        @media (min-width:1100px){
-          .v3-grid{grid-template-columns:minmax(0,1.35fr) minmax(0,0.9fr);column-gap:56px;
-            grid-template-areas:"hero controls" "advice controls";align-items:start}
-          .v3-controls{position:sticky;top:24px}
-        }
-        .v3-below{max-width:1240px;margin:0 auto;padding:8px 24px 72px;display:grid;gap:20px;
-          grid-template-columns:1fr}
-        @media (min-width:1100px){ .v3-below{grid-template-columns:1fr 1fr} }
-      ` }} />
+      {/* two columns at >= 1100px: the ticket on the left, what you set and what you can do instead
+          on the right. On a phone: the ticket, the alternatives, then the controls (PRD-V3 R6). */}
+      <style dangerouslySetInnerHTML={{ __html: PAGE_CSS }} />
 
       <div className="v3-grid">
         <div className="v3-hero">
-          <HeroSection
-            costUsd={quote?.fillCostUsd ?? 0}
-            limitPct={effectiveLimit}
-            fillPct={quote?.fillCostPct ?? 0}
+          <TradeTicket
+            symbol={selectedToken}
             amountUsd={amountNum}
-            isBlocked={shouldRefuse}
+            limitPct={effectiveLimit}
+            quote={quote}
+            blocked={shouldRefuse}
             noRoute={noRoute}
-            selectedStock={selectedToken}
-            hasQuote={Boolean(quote)}
             failed={Boolean(error) && !quote}
-          />
+            mintExt={mintExt}
+            routeNames={routeNames}
+          >
+            {foot}
+          </TradeTicket>
         </div>
 
         <div className="v3-controls" data-controls>
-          <div style={card}>
+          <div className="v3-card">
             <ControlsSection
               selectedToken={selectedToken}
               onSelectToken={setSelectedToken}
@@ -323,59 +367,11 @@ export default function Home() {
               costByToken={quote ? { ...costByToken, [selectedToken]: quote.fillCostPct } : costByToken}
               blocked={shouldRefuse}
             />
-
-            {error && (
-              <div style={{ marginTop: "16px", padding: "12px 14px", border: "1px solid var(--signal)", borderRadius: "6px", background: "rgba(196, 38, 29, 0.06)", fontFamily: "Archivo, sans-serif", fontSize: "14px", lineHeight: 1.5, color: "var(--text-primary)" }}>
-                {error}
-              </div>
-            )}
-
-            {shouldRefuse && (quote || noRoute) ? (
-              <div
-                data-refusal
-                style={{ marginTop: "18px", padding: "14px 16px", border: "1px solid var(--signal)", borderRadius: "6px", background: "rgba(196, 38, 29, 0.08)", animation: "refuse-in 180ms cubic-bezier(0.23, 1, 0.32, 1)" }}
-              >
-                <div style={{ fontFamily: "Archivo, sans-serif", fontSize: "13px", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--signal)", marginBottom: "6px" }}>
-                  Blocked
-                </div>
-                <div style={{ fontFamily: "Archivo, sans-serif", fontSize: "14px", lineHeight: 1.5, color: "var(--text-primary)" }}>
-                  {noRoute || !quote ? (
-                    "No exchange can fill this order right now, so there is nothing to place."
-                  ) : (
-                    <>
-                      This order costs <Odometer value={quote.fillCostUsd} prefix="$" style={{ color: "var(--signal)" }} /> extra,{" "}
-                      <Odometer value={quote.fillCostPct} suffix="%" style={{ color: "var(--signal)" }} /> of what you spend. Your limit is{" "}
-                      {limitIsSet ? `${effectiveLimit.toFixed(2)}%` : "unset, so everything is blocked"}.
-                    </>
-                  )}
-                </div>
-              </div>
-            ) : quote ? (
-              // no live price, no order button: there is nothing to place
-              <button
-                onClick={connected ? handleSign : handleConnect}
-                disabled={signing || settling || (connected && !quote)}
-                style={{
-                  width: "100%",
-                  marginTop: "18px",
-                  padding: "16px",
-                  background: "var(--text-primary)",
-                  border: "1px solid var(--text-primary)",
-                  color: "var(--bg)",
-                  fontFamily: "Archivo, sans-serif",
-                  fontSize: "14px",
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  cursor: signing || (connected && !quote) ? "not-allowed" : "pointer",
-                  borderRadius: "6px",
-                }}
-              >
-                {!connected ? "Connect a wallet to place this order" : signing ? "Signing…" : settling ? "Waiting for the chain…" : "Place this order"}
-              </button>
-            ) : null}
+            {error && <div className="v3-error">{error}</div>}
           </div>
         </div>
+
+        <div className="v3-action">{action}</div>
 
         <div className="v3-advice">
           {/* no live price: no advice to give, so no empty card */}
@@ -389,46 +385,60 @@ export default function Home() {
               quote={quote}
               costByToken={costByToken}
               onUseAmount={(n) => setAmount(String(n))}
+              onLead={setLead}
             />
           )}
-          <IssuerSummary symbol={selectedToken} extensions={mintExt} loading={mintExt === undefined} />
         </div>
       </div>
 
-      <div className="v3-below">
-        {quote && (
-          <div style={card} data-kept>
-            <KeptVsLost amountInUsd={quote.amountInUsd} costUsd={quote.fillCostUsd} />
-          </div>
-        )}
-        {quote && (
-          <div style={card}>
-            <PoolDrain amountUsd={amountNum} liquidityUsd={quote.liquidityUsd} refusing={Boolean(shouldRefuse)} />
-            <p data-route style={{ fontFamily: "Archivo, sans-serif", fontSize: "14px", lineHeight: 1.5, color: "var(--text-muted)", margin: "14px 0 0" }}>
-              {routeNames.length
-                ? `Your order fills through ${joinNames(routeNames)}.`
-                : "Where this order fills is shown once it is quoted."}
-            </p>
-          </div>
-        )}
-
-        <div style={{ gridColumn: "1 / -1", marginTop: "24px" }}>
-          <h2 style={{ fontFamily: "Archivo, sans-serif", fontSize: "18px", fontWeight: 500, color: "var(--text-primary)", margin: "0 0 14px" }}>
-            Also in THE MARK
-          </h2>
-          <div style={{ display: "grid", gap: "14px", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
-            {[
-              { href: "/census", title: "Compare stocks", text: "Every stock priced at three order sizes, side by side, so you can see which ones cost you the most." },
-              { href: "/proof", title: "Verify a trade", text: "Paste the receipt of any trade and see what it really cost, read off the public record." },
-            ].map((l) => (
-              <a key={l.href} href={l.href} style={{ ...card, display: "block", textDecoration: "none" }}>
-                <div style={{ fontFamily: "Archivo, sans-serif", fontSize: "16px", fontWeight: 500, color: "var(--text-primary)", marginBottom: "6px" }}>{l.title}</div>
-                <div style={{ fontFamily: "Archivo, sans-serif", fontSize: "14px", lineHeight: 1.5, color: "var(--text-muted)" }}>{l.text}</div>
-              </a>
-            ))}
-          </div>
-        </div>
-      </div>
+      <nav className="v3-also" aria-label="Also in THE MARK">
+        {[
+          { href: "/census", title: "Compare stocks", text: "Every stock at three order sizes, side by side." },
+          { href: "/proof", title: "Verify a trade", text: "Paste any trade and see what it really cost." },
+        ].map((l) => (
+          <a key={l.href} href={l.href} className="v3-link">
+            <span className="v3-link-t">{l.title} <span aria-hidden>→</span></span>
+            <span className="v3-link-d">{l.text}</span>
+          </a>
+        ))}
+      </nav>
     </div>
   );
 }
+
+const PAGE_CSS = `
+.v3-grid{max-width:1240px;margin:0 auto;padding:48px 24px 40px;display:grid;gap:32px;
+  grid-template-columns:1fr;grid-template-areas:"hero" "controls" "action" "advice"}
+.v3-hero{grid-area:hero;min-width:0}.v3-action{grid-area:action;min-width:0}.v3-controls{grid-area:controls;min-width:0}.v3-advice{grid-area:advice;min-width:0}
+@media (min-width:1100px){
+  .v3-grid{grid-template-columns:minmax(0,1.25fr) minmax(0,0.95fr);column-gap:48px;row-gap:24px;
+    grid-template-areas:"hero controls" "hero action" "hero advice";grid-template-rows:auto auto 1fr;align-items:start}
+}
+.v3-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:22px}
+.v3-error{margin-top:16px;padding:12px 14px;border:1px solid var(--signal);border-radius:6px;
+  background:rgba(196,38,29,.08);font-family:Archivo,sans-serif;font-size:14px;line-height:1.5}
+.tk-refusal{font-family:Archivo,sans-serif;font-size:16px;font-weight:600;color:var(--signal);
+  padding:14px 16px;border:2px solid var(--signal);border-radius:6px;animation:refuse-in 180ms cubic-bezier(.23,1,.32,1)}
+.v3-act-label{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--text-dim);margin-bottom:12px;display:flex;align-items:center}
+.v3-act .tk-place.v3-lead{margin-top:12px;text-transform:none;letter-spacing:0;font-size:16px;background:#3DBE74;color:#06140C;box-shadow:0 4px 0 #1E6B41}
+.v3-act .tk-place{background:#F3EEE2;color:#17140F;box-shadow:0 4px 0 #8C8676}
+.v3-act .tk-place:hover{box-shadow:0 5px 0 #8C8676}.v3-act .tk-place:active{box-shadow:0 1px 0 #8C8676}
+.v3-act-blocked{font-family:Archivo,sans-serif;font-size:15px;line-height:1.5;color:var(--text-muted);margin:0}
+.tk-ok{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--success);margin-bottom:10px}
+.tk-place{width:100%;padding:16px;border-radius:6px;border:none;background:#17140F;color:#F3EEE2;
+  font-family:Archivo,sans-serif;font-size:14px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  cursor:pointer;transition:transform 120ms ease-out,box-shadow 160ms ease-out;box-shadow:0 4px 0 #000}
+.tk-place:hover{transform:translateY(-1px);box-shadow:0 5px 0 #000}
+.tk-place:active{transform:translateY(3px);box-shadow:0 1px 0 #000}
+.tk-place:disabled{opacity:.6;cursor:wait}
+.v3-also{max-width:1240px;margin:0 auto;padding:8px 24px 72px;display:grid;gap:14px;
+  grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.v3-link{display:block;text-decoration:none;padding:18px 20px;border:1px solid var(--border);border-radius:10px;
+  transition:border-color 160ms ease-out,transform 160ms ease-out}
+.v3-link:hover{border-color:var(--text-dim);transform:translateY(-2px)}
+.v3-link-t{display:block;font-family:Archivo,sans-serif;font-size:16px;font-weight:500;color:var(--text-primary);margin-bottom:4px}
+.v3-link-d{display:block;font-family:Archivo,sans-serif;font-size:14px;color:var(--text-muted)}
+@media (prefers-reduced-motion:reduce){.tk-refusal{animation:none}}
+`;

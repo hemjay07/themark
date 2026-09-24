@@ -64,7 +64,7 @@ export default function LimitLine({
             left: 0,
             width: "3px",
             height: "32px",
-            background: "white",
+            background: "var(--text-primary)",
             zIndex: 2,
           }}
         />
@@ -132,31 +132,7 @@ export default function LimitLine({
           </div>
         )}
 
-        {/* the refusal stamped onto the line when the order crosses it */}
-        {isBlocked && showLimit && (
-          <div
-            data-seal
-            style={{
-              position: "absolute",
-              left: `${LIMIT_AT * 100}%`,
-              top: "calc(100% + 10px)",
-              transform: "rotate(-7deg)",
-              transformOrigin: "left top",
-              border: "2px solid var(--signal)",
-              color: "var(--signal)",
-              background: "var(--bg)",
-              padding: "4px 10px",
-              fontFamily: "Archivo, sans-serif",
-              fontWeight: 700,
-              fontSize: "15px",
-              letterSpacing: "0.14em",
-              zIndex: 4,
-              animation: "seal-in 260ms cubic-bezier(0.2, 1.4, 0.4, 1)",
-            }}
-          >
-            BLOCKED
-          </div>
-        )}
+
       </div>
 
       </div>

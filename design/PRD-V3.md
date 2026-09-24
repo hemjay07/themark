@@ -130,3 +130,6 @@ Back to 1%. At 0.5% Palantir had no passing size at all (the cost floored near 0
 
 ### Default stock (revised 2026-09-24, later)
 OpenAI replaces Palantir. Palantir at $25,000 read 0.54%, 1.26% and 0.83% within two hours, so it opened blocked or not by chance. OpenAI read 1.93%, 2.14% and 2.14% today and rises smoothly with size (0.42% at $500, 0.95% at $2,000, 2.14% at $25,000), so a 1% limit blocks the default and a smaller size passes.
+
+### Check 2 amended again (2026-09-24, ASSESS-5)
+Phone order is now controls, then step 4 (place the order), then the alternatives. Two of three assessors in design/ASSESS-5.md found that putting the alternatives before the controls showed the result before anything the visitor could change, which matches the partner's "people won't know how to use it". The best alternative ("Use $X instead") now also appears inside step 4, so a blocked order still ends in a button. check-v31.mjs #2 tests the new order.

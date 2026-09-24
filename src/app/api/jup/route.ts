@@ -21,7 +21,8 @@ export async function GET(request: Request) {
   const prio = u.searchParams.get("prio");
   const priority = prio === "low" ? "low" : prio === "mid" ? "mid" : "high";
   u.searchParams.delete("prio");
-  const { status, body } = await jupGet(`${path}?${u.searchParams.toString()}`, priority);
+  // background work is dropped if the page that asked for it closes before its turn
+  const { status, body } = await jupGet(`${path}?${u.searchParams.toString()}`, priority, priority === "high" ? undefined : request.signal);
   return new NextResponse(body, {
     status,
     // whether a key is configured, yes or no; the key itself never leaves the server
