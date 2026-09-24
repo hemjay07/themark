@@ -18,7 +18,8 @@ export async function GET(request: Request) {
   }
   u.searchParams.delete("path");
   // the stock-chip scan marks itself low priority so a person's own quote and the advice run first
-  const priority = u.searchParams.get("prio") === "low" ? "low" : "high";
+  const prio = u.searchParams.get("prio");
+  const priority = prio === "low" ? "low" : prio === "mid" ? "mid" : "high";
   u.searchParams.delete("prio");
   const { status, body } = await jupGet(`${path}?${u.searchParams.toString()}`, priority);
   return new NextResponse(body, {

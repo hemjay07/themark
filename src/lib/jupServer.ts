@@ -15,8 +15,12 @@ export const jupHeaders = (): Record<string, string> => ({
   ...(KEY ? { "x-api-key": KEY } : {}),
 });
 
+// Three lanes. A visitor's own quote must never wait behind anyone's advice checks, or a second
+// visitor sees an empty page while the first visitor's advice runs.
 type Job = () => void;
+export type Priority = "high" | "mid" | "low";
 const high: Job[] = [];
+const mid: Job[] = [];
 const low: Job[] = [];
 let lastStart = 0;
 let pumping = false;
@@ -25,7 +29,7 @@ function pump() {
   if (pumping) return;
   pumping = true;
   const tick = () => {
-    const job = high.shift() ?? low.shift();
+    const job = high.shift() ?? mid.shift() ?? low.shift();
     if (!job) {
       pumping = false;
       return;
@@ -40,9 +44,9 @@ function pump() {
   tick();
 }
 
-function slot(priority: "high" | "low"): Promise<void> {
+function slot(priority: Priority): Promise<void> {
   return new Promise((resolve) => {
-    (priority === "high" ? high : low).push(resolve);
+    (priority === "high" ? high : priority === "mid" ? mid : low).push(resolve);
     pump();
   });
 }
@@ -52,7 +56,7 @@ const inflight = new Map<string, Promise<{ status: number; body: string }>>();
 
 export function jupGet(
   pathAndQuery: string,
-  priority: "high" | "low" = "high"
+  priority: Priority = "high"
 ): Promise<{ status: number; body: string }> {
   const url = `${UPSTREAM}${pathAndQuery}`;
   const existing = inflight.get(url);

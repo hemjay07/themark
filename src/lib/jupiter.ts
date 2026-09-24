@@ -178,13 +178,15 @@ async function fetchWithRetry(url: string, tries = 3): Promise<Response | null> 
   return null;
 }
 
-export async function fetchPrices(mints: string[], background = false): Promise<Record<string, Price>> {
+export async function fetchPrices(mints: string[], background: boolean | "mid" = false): Promise<Record<string, Price>> {
   const params = new URLSearchParams();
-  mints.forEach((m) => params.append("ids", m));
+  // api.jup.ag wants one comma-separated ids value; repeated ids=… params get a 400 (checked
+  // 2026-09-24), which silently sent every chip back to fetching its own price at top priority
+  params.set("ids", mints.join(","));
 
   try {
     // through this app's own queue, never straight from the browser (see src/app/api/jup/route.ts)
-    const res = await fetchWithRetry(`/api/jup?path=/price/v3&${params}${background ? "&prio=low" : ""}`);
+    const res = await fetchWithRetry(`/api/jup?path=/price/v3&${params}${background === "mid" ? "&prio=mid" : background ? "&prio=low" : ""}`);
     if (!res) {
       console.warn("Jupiter price unavailable after retries");
       return {};
@@ -206,6 +208,8 @@ export interface QuoteContext {
   extensions?: ParsedExtension[] | null;
   // background work (the stock-chip scan) queues behind a person's own quote and the advice
   background?: boolean;
+  // advice checks queue behind a person's own quote, ahead of background work
+  advice?: boolean;
 }
 
 export async function getQuote(
@@ -225,7 +229,7 @@ export async function getQuote(
   });
 
   try {
-    const res = await fetchWithRetry(`/api/jup?path=/swap/v1/quote&${params}${ctx?.background ? "&prio=low" : ""}`);
+    const res = await fetchWithRetry(`/api/jup?path=/swap/v1/quote&${params}${ctx?.background ? "&prio=low" : ctx?.advice ? "&prio=mid" : ""}`);
     if (!res) {
       console.error("Quote unavailable after retries");
       return null;
@@ -236,7 +240,8 @@ export async function getQuote(
     // Fetch prices to get reference price, unless the caller already read it this pass
     let price = ctx?.price;
     if (!price) {
-      const prices = await fetchPrices([outputMint]);
+      // a fallback price read inherits the priority of whatever asked for the quote
+      const prices = await fetchPrices([outputMint], ctx?.background ? true : ctx?.advice ? "mid" : false);
       price = prices[outputMint];
     }
 

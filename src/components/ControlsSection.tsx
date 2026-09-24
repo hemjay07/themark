@@ -15,6 +15,8 @@ interface ControlsSectionProps {
 }
 
 // Controls visible on the first screen: stock chips, amount slider, limit input.
+const CHIP_CSS = "@keyframes chip-pulse{0%,100%{opacity:.15}50%{opacity:.5}}";
+
 export default function ControlsSection({
   selectedToken,
   onSelectToken,
@@ -34,6 +36,7 @@ export default function ControlsSection({
         width: "100%",
       }}
     >
+      <style dangerouslySetInnerHTML={{ __html: CHIP_CSS }} />
       {/* Stock selector chips */}
       <div style={{ marginBottom: "32px" }}>
         <div
@@ -89,7 +92,9 @@ export default function ControlsSection({
                             : "var(--text-dim)",
                     }}
                   >
-                    {cost === undefined ? "…" : cost === null ? "—" : `${cost.toFixed(2)}%`}
+                    {cost === undefined ? (
+                      <span data-chip-loading aria-label="pricing" style={{ display: "inline-block", width: "28px", height: "3px", borderRadius: "2px", background: "currentColor", opacity: 0.35, verticalAlign: "middle", animation: "chip-pulse 1100ms ease-in-out infinite" }} />
+                    ) : cost === null ? "—" : `${cost.toFixed(2)}%`}
                   </span>
                 )}
               </button>

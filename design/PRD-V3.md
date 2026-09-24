@@ -113,3 +113,14 @@ can drift, and PRD checks 2 and 3 depend on it.
 At 390px "Check an order / Compare stocks / Verify a trade" ran off the screen (Ruler: right edge 543px).
 Nav now reads the full names at > 640px and "Check / Compare / Verify" at <= 640px. Check 8 tests the
 full names at 1440 and the short ones at 390.
+
+### Check 2 amended by ASSESS-3 (2026-09-23)
+The page now opens on a painful order (blocked, advice visible), because the block plus the advice is
+the strongest thing the product does. Check 2 becomes: on load, either the action button is visible,
+or the advice offers a "Use $X" button that makes the order placeable in one click (tested by
+scripts/check-v31.mjs #1b).
+
+### Default limit (revised 2026-09-24)
+Palantir at $25,000 fell under 1% during the night, so the page stopped opening blocked. The default
+limit is now 0.50%, Jupiter's own standard slippage setting, which keeps the painful opening order
+far more often. It is a live market: no default is guaranteed, and checks that depend on it can drift.

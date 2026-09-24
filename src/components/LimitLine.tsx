@@ -112,7 +112,51 @@ export default function LimitLine({
           />
         )}
 
-        {/* BLOCKED label positioned from parent container */}
+        {/* your limit, written directly above its own tick so it can never collide with the bar label */}
+        {showLimit && (
+          <div
+            data-legend-limit
+            style={{
+              position: "absolute",
+              left: `${LIMIT_AT * 100}%`,
+              bottom: "calc(100% - 2px)",
+              transform: "translateX(-50%)",
+              whiteSpace: "nowrap",
+              color: "var(--signal)",
+              fontSize: "11px",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            your limit {limitPct.toFixed(2)}%
+          </div>
+        )}
+
+        {/* the refusal stamped onto the line when the order crosses it */}
+        {isBlocked && showLimit && (
+          <div
+            data-seal
+            style={{
+              position: "absolute",
+              left: `${LIMIT_AT * 100}%`,
+              top: "calc(100% + 10px)",
+              transform: "rotate(-7deg)",
+              transformOrigin: "left top",
+              border: "2px solid var(--signal)",
+              color: "var(--signal)",
+              background: "var(--bg)",
+              padding: "4px 10px",
+              fontFamily: "Archivo, sans-serif",
+              fontWeight: 700,
+              fontSize: "15px",
+              letterSpacing: "0.14em",
+              zIndex: 4,
+              animation: "seal-in 260ms cubic-bezier(0.2, 1.4, 0.4, 1)",
+            }}
+          >
+            BLOCKED
+          </div>
+        )}
       </div>
 
       </div>
@@ -130,28 +174,19 @@ export default function LimitLine({
           fontFamily: '"JetBrains Mono", monospace',
         }}
       >
-        <div style={{ position: "absolute", left: 0, top: 12, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "8px" }}>
+        <div data-legend-bar style={{ position: "absolute", left: 0, top: 12, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "8px" }}>
           <span aria-hidden style={{ width: "14px", height: "6px", background: barColor, display: "inline-block" }} />
           extra this order costs
         </div>
-        {showLimit && (
-          <div
-            style={{
-              position: "absolute",
-              left: `${LIMIT_AT * 100}%`,
-              top: 12,
-              transform: "translateX(-50%)",
-              whiteSpace: "nowrap",
-              color: "var(--signal)",
-            }}
-          >
-            your limit {limitPct.toFixed(2)}%
-          </div>
-        )}
+
       </div>
 
       <style dangerouslySetInnerHTML={{
         __html: `
+          @keyframes seal-in {
+            from { opacity: 0; transform: rotate(-7deg) scale(1.6); }
+            to { opacity: 1; transform: rotate(-7deg) scale(1); }
+          }
           @keyframes fadeIn {
             from {
               opacity: 0;

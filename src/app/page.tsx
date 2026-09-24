@@ -14,11 +14,11 @@ import IssuerSummary from "@/components/IssuerSummary";
 import PoolDrain from "@/components/PoolDrain";
 
 export default function Home() {
-  const [amount, setAmount] = useState("2000");
+  const [amount, setAmount] = useState("25000");
   const [selectedToken, setSelectedToken] = useState("PLTRx");
   const [quote, setQuote] = useState<QuoteResult | null>(null);
   const [receipt, setReceipt] = useState<ReceiptType | null>(null);
-  const [worstFillPct, setWorstFillPct] = useState(1);
+  const [worstFillPct, setWorstFillPct] = useState(0.5);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [connected, setConnected] = useState(false);
@@ -296,7 +296,7 @@ export default function Home() {
           escapes the ">" in a selector between server and client. */}
       <style dangerouslySetInnerHTML={{ __html: `
         .v3-grid{max-width:1240px;margin:0 auto;padding:56px 24px 40px;display:grid;gap:40px;
-          grid-template-columns:1fr;grid-template-areas:"hero" "controls" "advice"}
+          grid-template-columns:1fr;grid-template-areas:"hero" "advice" "controls"}
         .v3-hero{grid-area:hero}.v3-controls{grid-area:controls}.v3-advice{grid-area:advice}
         @media (min-width:1100px){
           .v3-grid{grid-template-columns:minmax(0,1.35fr) minmax(0,0.9fr);column-gap:56px;
@@ -396,6 +396,7 @@ export default function Home() {
             noRoute={noRoute}
             quote={quote}
             costByToken={costByToken}
+            onUseAmount={(n) => setAmount(String(n))}
           />
           <IssuerSummary symbol={selectedToken} extensions={mintExt} loading={mintExt === undefined} />
         </div>

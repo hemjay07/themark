@@ -16,7 +16,7 @@ const mono: CSSProperties = {
 };
 
 const wordmarkStyle: CSSProperties = {
-  height: "18px",
+  height: "22px",
   width: "auto",
   display: "block",
 };

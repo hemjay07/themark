@@ -33,13 +33,28 @@ export default function HeroSection({
 
   return (
     <div data-hero style={{ width: "100%" }}>
+      {/* the name's second meaning, used once, as the claim (founder rule: a repeatable phrase with a
+          second meaning). A mark is a measurement line, and the person a con is run on. */}
+      <h1
+        style={{
+          fontFamily: "Archivo, sans-serif",
+          fontWeight: 600,
+          fontSize: "clamp(34px, 4.2vw, 56px)",
+          lineHeight: 1.02,
+          letterSpacing: "-0.02em",
+          color: "var(--text-primary)",
+          margin: "0 0 14px",
+        }}
+      >
+        Don&apos;t be the mark.
+      </h1>
       <p
         style={{
           fontFamily: "Archivo, sans-serif",
           fontSize: "clamp(17px, 1.6vw, 20px)",
           lineHeight: 1.45,
           color: "var(--text-muted)",
-          margin: "0 0 36px",
+          margin: "0 0 32px",
           maxWidth: "46ch",
         }}
       >

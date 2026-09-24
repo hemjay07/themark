@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { TOKEN_LIST } from "@/lib/tokens";
 import { CENSUS_SIZES } from "@/lib/censusSizes";
 import CensusRow, { type CellState, type RowState } from "@/components/CensusRow";
-import PoolBand from "@/components/PoolBand";
 
 const ROW_SLOT = 160;
 
@@ -135,8 +134,6 @@ export default function CensusPage() {
 
   return (
     <>
-      {/* the instrument's own material, carried here so the three surfaces read as one product */}
-      <PoolBand height={190} />
       <main className="census-page">
       {/* Rendered via dangerouslySetInnerHTML, not as a plain text child: <style> is a raw-text
           HTML element, so the browser never decodes entities inside it. React's default text-node
@@ -152,7 +149,7 @@ export default function CensusPage() {
         .census-sub{font-size:14px;line-height:1.6;color:var(--text-muted);max-width:56ch;margin:0 0 24px}
         .census-status{display:flex;align-items:center;gap:8px;font-family:"JetBrains Mono",monospace;
           font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);
-          margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+          margin-bottom:8px;min-height:2.6em;line-height:1.3}
         .census-dot{width:6px;height:6px;border-radius:50%;background:var(--success);flex:0 0 6px}
         .census-dot[data-done="true"]{opacity:1}
         /* Reserves its own space at all times (visibility:hidden keeps the box, drops it from the
@@ -223,7 +220,7 @@ export default function CensusPage() {
         <span suppressHydrationWarning>
           {readAtMs && now
             ? `read live ${Math.max(0, Math.round((now - readAtMs) / 1000))}s ago · every 2 min`
-            : "taking the first reading now"}
+            : "taking the first reading now: about 25 seconds, then every 2 minutes"}
         </span>
       </div>
 
@@ -273,9 +270,8 @@ export default function CensusPage() {
       </div>
 
       <div className="census-foot">
-        every figure above came from getQuote against lite-api.jup.ag/swap/v1/quote at the moment it
-        was read, USDC in, 50bps slippage. a row that says &quot;no read&quot; failed its call and shows
-        nothing invented in its place.
+        Every figure is a live price quote for buying with USDC, taken in one reading that refreshes every
+        two minutes. A row that says &quot;no read&quot; could not be priced, and nothing is filled in for it.
       </div>
     </main>
     </>
