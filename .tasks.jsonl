@@ -11,3 +11,17 @@
 {"op":"close","id":"T001","at":"2026-09-22T21:35:25Z","proof":"test -f design/ASSESS-2.md && grep -q '^## Verdict' design/ASSESS-2.md exited 0"}
 {"op":"add","id":"T010","at":"2026-09-22T21:36:13Z","what":"/proof demo path succeeds on a cold browser","why":"ASSESS-2: the example trade ends in REFUSED ... no live reference price","done_when":"node scripts/check-proof.mjs http://localhost:3000","blocked_by":null}
 {"op":"close","id":"T010","at":"2026-09-22T21:37:23Z","proof":"node scripts/check-proof.mjs http://localhost:3000 exited 0"}
+{"op":"add","id":"T011","at":"2026-09-22T22:05:00Z","what":"Jupiter key configured so a judge cannot exhaust the quota","why":"Keyless api.jup.ag is 30/min; one census load is ~26 calls","done_when":"grep -q '^JUPITER_API_KEY=jup_' .env.local","blocked_by":null}
+{"op":"add","id":"T012","at":"2026-09-23T04:48:45Z","what":"Jupiter key configured so a judge cannot exhaust the quota","why":"T011's check passed on the literal placeholder jup_PASTE_YOURS_HERE","done_when":"node scripts/check-key.mjs","blocked_by":null}
+{"op":"supersede","id":"T011","at":"2026-09-23T04:48:45Z","by":"T012"}
+{"op":"close","id":"T012","at":"2026-09-23T04:53:43Z","proof":"node scripts/check-key.mjs exited 0"}
+{"op":"add","id":"T013","at":"2026-09-23T06:08:20Z","what":"PRD-V3 R1+R3+R5 copy, names, labels, defaults, nav","why":"self-assessment 2026-09-23: nobody can tell what it is or read the stocks","done_when":"node scripts/check-v3.mjs http://localhost:3000","blocked_by":null}
+{"op":"add","id":"T014","at":"2026-09-23T06:08:20Z","what":"PRD-V3 R2+R2b what to do instead, and no-route handling","why":"a guard that only says no is half a product","done_when":"node scripts/check-v3.mjs http://localhost:3000","blocked_by":null}
+{"op":"add","id":"T015","at":"2026-09-23T06:08:20Z","what":"PRD-V3 R4+R6 issuer powers up, two-column layout, grid removed","why":"strongest finding buried; one narrow column; grid read as noise","done_when":"node scripts/check-v3.mjs http://localhost:3000","blocked_by":null}
+{"op":"add","id":"T016","at":"2026-09-23T06:08:20Z","what":"PRD-V3 Ruler clean on all three routes","why":"PRD check 12","done_when":"node ~/.claude/surface/bin/measure.mjs --url http://localhost:3000/ --out design/shots --name v3gate --width 390,1440 --motion --floor --budget-kb 900 | grep -q '\"pass\":true'","blocked_by":null}
+{"op":"close","id":"T013","at":"2026-09-23T06:37:58Z","proof":"node scripts/check-v3.mjs http://localhost:3000 exited 0"}
+{"op":"close","id":"T014","at":"2026-09-23T06:38:53Z","proof":"node scripts/check-v3.mjs http://localhost:3000 exited 0"}
+{"op":"close","id":"T015","at":"2026-09-23T06:39:47Z","proof":"node scripts/check-v3.mjs http://localhost:3000 exited 0"}
+{"op":"close","id":"T016","at":"2026-09-23T06:40:49Z","proof":"node ~/.claude/surface/bin/measure.mjs --url http://localhost:3000/ --out design/shots --name v3gate --width 390,1440 --motion --floor --budget-kb 900 | grep -q '\"pass\":true' exited 0"}
+{"op":"add","id":"T017","at":"2026-09-23T06:50:35Z","what":"V3.1: open blocked with a Use-$X button, phone order, legend, headline+seal, census, chips","why":"ASSESS-3: opens on a harmless number, best feature has no button and is below the fold on a phone, census opens empty, nothing memorable","done_when":"node scripts/check-v31.mjs http://localhost:3000","blocked_by":null}
+{"op":"close","id":"T017","at":"2026-09-24T16:47:02Z","proof":"node scripts/check-v31.mjs http://localhost:3000 exited 0"}

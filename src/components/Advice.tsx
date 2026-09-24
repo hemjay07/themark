@@ -59,39 +59,41 @@ export default function Advice({ symbol, amountUsd, limitPct, blocked, noRoute, 
         // size that both routes and stays under the line: raise after a pass, lower after a fail.
         // Two fixed guesses were not enough; the market moves between one run and the next.
         if (blocked) {
-          let lo = 0; // largest size known to pass
-          let hi = amountUsd; // smallest size known to fail
-          let size = noRoute || !quote || quote.fillCostPct <= 0
+          // Buy less: the cost does not rise smoothly with size (routes split across pools differently
+          // at each size), so a binary search can land on a size that passed once by luck. Step down
+          // from an estimate instead, and only suggest a size that passes on two separate quotes, under
+          // 90% of the line, so it still passes when the person clicks it.
+          const target = limitPct * 0.9;
+          const start = noRoute || !quote || quote.fillCostPct <= 0
             ? amountUsd * 0.5
-            : amountUsd * (limitPct / quote.fillCostPct) * 0.95;
-          let best: { size: number; cost: number } | null = null;
-          for (let i = 0; i < 4; i++) {
-            const s = Math.floor(size / 50) * 50;
-            if (s < 50 || s <= lo || s >= hi) break;
+            : amountUsd * Math.min(0.9, target / quote.fillCostPct);
+          let smallest: { size: number; pct: number } | null = null;
+          let found = false;
+          for (const f of [1, 0.55, 0.3, 0.15, 0.07]) {
+            const s = Math.floor((start * f) / 50) * 50;
+            if (s < 50) break;
             const r = await q(s);
             if (cancelled) return;
-            if (r && r.fillCostPct <= limitPct) {
-              best = { size: s, cost: r.fillCostUsd };
-              // show the first size that passes straight away; later checks only raise it
-              setLess({
-                key: "less",
-                useAmount: best.size,
-                saving: `${usd(best.size)} stays under your line`,
-                text: `Buy up to ${usd(best.size)} of ${name} and it costs ${usd(best.cost)} extra, under your ${limitPct.toFixed(2)}% limit (checked just now).`,
-              });
-              lo = s;
-              size = (lo + hi) / 2;
-            } else {
-              hi = s;
-              size = lo > 0 ? (lo + hi) / 2 : s * 0.55;
-            }
-          }
-          if (best) {
+            if (r) smallest = { size: s, pct: r.fillCostPct };
+            if (!r || r.fillCostPct > target) continue;
+            const again = await q(s);
+            if (cancelled) return;
+            if (!again || again.fillCostPct > target) continue;
+            const cost = Math.max(r.fillCostUsd, again.fillCostUsd);
             setLess({
               key: "less",
-              useAmount: best.size,
-              saving: `${usd(best.size)} stays under your line`,
-              text: `Buy up to ${usd(best.size)} of ${name} and it costs ${usd(best.cost)} extra, under your ${limitPct.toFixed(2)}% limit (checked just now).`,
+              useAmount: s,
+              saving: `${usd(s)} stays under your line`,
+              text: `Buy up to ${usd(s)} of ${name} and it costs ${usd(cost)} extra, under your ${limitPct.toFixed(2)}% limit (checked twice just now).`,
+            });
+            found = true;
+            break;
+          }
+          // nothing smaller fits: say so, with the smallest size checked, instead of saying nothing
+          if (!found && smallest && smallest.pct > limitPct) {
+            setLess({
+              key: "less",
+              text: `No size fits under your ${limitPct.toFixed(2)}% limit right now. Even ${usd(smallest.size)} of ${name} costs ${smallest.pct.toFixed(2)}% extra.`,
             });
           }
         }

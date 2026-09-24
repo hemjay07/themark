@@ -12,6 +12,7 @@ interface ControlsSectionProps {
   worstFillPct: number;
   onLimitChange: (value: number) => void;
   costByToken: Record<string, number | null>;
+  blocked: boolean;
 }
 
 // Controls visible on the first screen: stock chips, amount slider, limit input.
@@ -26,6 +27,7 @@ export default function ControlsSection({
   worstFillPct,
   onLimitChange,
   costByToken,
+  blocked,
 }: ControlsSectionProps) {
   const amountNum = parseFloat(amount) || 5000;
   const fillPercent = ((amountNum - 10) / (25000 - 10)) * 100;
@@ -171,7 +173,7 @@ export default function ControlsSection({
             <span>$25K</span>
           </div>
           <p style={{ fontFamily: "Archivo, sans-serif", fontSize: "13px", color: "var(--text-dim)", margin: "10px 0 0" }}>
-            Drag it up to see where this order gets blocked.
+            {blocked ? "Drag it down to find a size that gets through." : "Drag it up to see where this order gets blocked."}
           </p>
         </div>
       </div>

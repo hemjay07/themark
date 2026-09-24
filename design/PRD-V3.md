@@ -124,3 +124,9 @@ scripts/check-v31.mjs #1b).
 Palantir at $25,000 fell under 1% during the night, so the page stopped opening blocked. The default
 limit is now 0.50%, Jupiter's own standard slippage setting, which keeps the painful opening order
 far more often. It is a live market: no default is guaranteed, and checks that depend on it can drift.
+
+### Default limit (revised again 2026-09-24, later)
+Back to 1%. At 0.5% Palantir had no passing size at all (the cost floored near 0.58% even at $1,750), so the page opened on a block with no way out. At 1%: $25,000 costs 1.26% (blocked) and $8,900 costs 0.79% (passes). Buy-less now steps down from an estimate and only suggests a size that passes two separate quotes under 90% of the line, because cost is not monotonic in size ($2,000 measured 1.22% while $5,000 measured 0.59%). When nothing fits it says so with the smallest size checked.
+
+### Default stock (revised 2026-09-24, later)
+OpenAI replaces Palantir. Palantir at $25,000 read 0.54%, 1.26% and 0.83% within two hours, so it opened blocked or not by chance. OpenAI read 1.93%, 2.14% and 2.14% today and rises smoothly with size (0.42% at $500, 0.95% at $2,000, 2.14% at $25,000), so a 1% limit blocks the default and a smaller size passes.

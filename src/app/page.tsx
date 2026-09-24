@@ -15,10 +15,10 @@ import PoolDrain from "@/components/PoolDrain";
 
 export default function Home() {
   const [amount, setAmount] = useState("25000");
-  const [selectedToken, setSelectedToken] = useState("PLTRx");
+  const [selectedToken, setSelectedToken] = useState("tOpenAI");
   const [quote, setQuote] = useState<QuoteResult | null>(null);
   const [receipt, setReceipt] = useState<ReceiptType | null>(null);
-  const [worstFillPct, setWorstFillPct] = useState(0.5);
+  const [worstFillPct, setWorstFillPct] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [connected, setConnected] = useState(false);
@@ -333,6 +333,7 @@ export default function Home() {
               worstFillPct={worstFillPct}
               onLimitChange={setWorstFillPct}
               costByToken={quote ? { ...costByToken, [selectedToken]: quote.fillCostPct } : costByToken}
+              blocked={shouldRefuse}
             />
 
             {error && (
