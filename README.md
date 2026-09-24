@@ -1,8 +1,7 @@
 # THE MARK
 
-**A guard in front of one click.** Before you buy a tokenized stock on Solana, THE MARK renders the
-liquidity pool you are about to trade into, shows what your exact order really costs, and then signs
-or refuses.
+**Don't be the mark.** THE MARK shows what a tokenized stock really costs you before you buy it on
+Solana, and stops the trade if that cost is more than you allow.
 
 ![THE MARK](public/brand/og.png)
 
@@ -34,21 +33,24 @@ minute. None of it is visible before you sign.
 
 ## What this does
 
-Three surfaces, all reading live.
+Three pages, all reading live.
 
-**`/` — the instrument.** The pool is drawn as the constant-product surface it actually is, in
-WebGL. Your order is carved into it as a trench whose depth is the impact the router returned for
-that exact amount. Move the amount and the trench deepens as the cost counts. Set the worst fill you
-will take, and above that line the sign button stops being a button and becomes a refusal that
-states the number.
+**`/`: check an order.** Pick a stock, an amount and a limit. The page shows the extra cost of that
+exact order in dollars: the price impact Jupiter returns for it, plus any Token-2022 transfer fee.
+If the cost is over your limit, the trade is blocked and the page says what to do instead:
+- buy less, with a one-click amount that passed two fresh quotes;
+- split the order into three;
+- what the same money costs in another stock.
 
-**`/census` — the field.** Every tokenized stock we track, measured at $500, $5,000 and $25,000,
-live, on one shared scale, ranked by what the fill actually costs. This is the evidence for the
-claim above, recomputed every time the page loads.
+It also lists what the issuer can do to your tokens, read from the mint. When a trade you place here
+lands, the app opens that trade on `/proof`.
 
-**`/proof` — the receipt.** Give it a transaction signature and it reads that transaction off
-Solana, decodes what actually moved from the pre and post token balances, and reconciles it against
-what the screen promised before it was signed. With the Solscan link, so you can check it yourself.
+**`/census`: compare stocks.** Every tokenized stock we track, at $500, $5,000 and $25,000, ranked by
+what the fill costs. One shared reading, refreshed every two minutes, with its age shown on the page.
+
+**`/proof`: verify a trade.** Give it a transaction signature and it reads that transaction off
+Solana, decodes what actually moved from the pre and post token balances, and prices it against the
+real share, with the Solscan link so you can check it yourself.
 
 ## The on-chain finding
 
@@ -66,7 +68,8 @@ Three bans, enforced in review and visible in the code:
 
 1. **No figure on a surface that was not returned by a call made in that moment.** No sample data,
    no placeholder price, no remembered number. When a call fails, the surface says so and shows
-   nothing in its place. There is no cache and no fallback price anywhere.
+   nothing in its place. The one shared reading is `/census`, cached for two minutes and labelled
+   with its age. There is no fallback price anywhere.
 2. **No chart of the token-vs-share gap.** It is 0.20% and everyone else is drawing it.
 3. **No green arrow, no confetti, no celebration of a trade.** The product's whole claim is that it
    tells you the cost.
@@ -84,14 +87,17 @@ Optional: set `SOLANA_RPC_URL` to a private RPC. Without it the app uses the pub
 endpoint, which is rate-limited and slow. The mint and transaction reads go through this app's own
 server routes (`/api/mint`, `/api/tx`) because the public RPC refuses browser-origin requests.
 
-No API keys are required. Jupiter's `lite-api` endpoints are public.
+Set `JUPITER_API_KEY` (a free key from the Jupiter portal) on the server. Every Jupiter call goes
+through `/api/jup` and a paced queue (`src/lib/jupServer.ts`), so the key never reaches the browser
+and the free tier's one request per second is never exceeded. Without a key it runs at half that rate.
 
 ## Stack
 
-Next.js 14 (app router), TypeScript, hand-written WebGL2 for the pool surface (no 3D library),
-Jupiter for quotes, prices and swaps, Solana web3.js loaded only at signing time.
+Next.js 14 (app router), TypeScript, Jupiter for quotes, prices and swaps, Solana RPC for mint
+extensions and transactions, Solana web3.js loaded only at signing time.
 
 ## Status
 
-Built and tested. The cost math has unit tests. All three surfaces render and measure clean at 390px
-and 1280px. What is not yet proven is stated in `PROGRESS.md` rather than hidden here.
+Built and tested. The cost math has unit tests (`npm test`), and the acceptance scripts in
+`scripts/` pass against live data at 390px and 1440px. Not yet proven: a trade signed through this
+app on mainnet.

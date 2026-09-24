@@ -1,38 +1,40 @@
-# THE MARK — Stocklana submission
+# THE MARK: Stocklana submission
 
-**One line.** Before you buy a tokenized stock on Solana, THE MARK renders the pool you are about to
-trade into, shows what your exact order really costs, and then signs or refuses.
+**One line.** THE MARK shows what a tokenized stock really costs you before you buy it on Solana, and stops the trade if that cost is more than you allow.
 
 ## Links
 - Live demo: _(pending deploy)_
 - Repository: _(pending publish)_
 - Demo video: _(pending)_
-- Proof of a landed transaction: `/proof?sig=<signature>` on the live demo
 
-## The claim, and how to check it
-The field charts the token-vs-share gap. We measured it at a median 0.20% across 20 pairs on
-2026-09-22. The cost that actually matters is the fill in the pool, which on the same day ranged
-from 0.06% (SPYx) to 2.56% (INTCx) on a $25,000 order, a spread of roughly 40x.
+## What it does
+1. **Check an order** (`/`). Pick a stock, an amount and a limit. You see the extra cost of that exact order in dollars, from a live Jupiter quote plus any Token-2022 transfer fee. Over your limit, the order is blocked, and the page tells you what to do instead:
+   - buy less, with a one-click amount that passed two fresh quotes;
+   - split the order into three;
+   - what the same money costs in another stock.
 
-Open `/census` and it recomputes that table live. Nothing on it is stored.
+   It also lists what the issuer can do to your tokens (take them, pause trading, run code on every transfer), read from the mint itself.
+2. **Compare stocks** (`/census`). Every stock at $500, $5,000 and $25,000, read live and refreshed every two minutes. On 24 September, $25,000 of OpenAI cost about 2.3% extra, and the same order in the S&P 500 cost almost nothing.
+3. **Verify a trade** (`/proof`). Paste any trade signature. It reads what actually moved off the chain and prices it against the real share. The example is a real $150.93 OpenAI purchase from 24 September that paid $2.82 more than the shares were worth.
+
+When a trade placed through the app lands, the app opens that trade's proof page, so the receipt is a link you can keep.
+
+## Why it matters
+Most dashboards chart the gap between the token and the share. We measured that gap at a median 0.20% on 22 September. The cost that decides what you pay is the fill in the pool. On the same $25,000 order, that ranged from almost nothing to over 2% depending on the stock, and it moves by the hour.
 
 ## Judging criteria
 | criterion | where to look |
 |---|---|
-| Real user, real problem | `/census`, which measures the whole field live rather than asserting the problem |
-| Working end-to-end demo | `/` quote to refusal to signature, then `/proof` reconciling the landed transaction |
-| Belongs on Solana | Cost is a property of the pool being quoted; the Token-2022 multiplier and transfer fee are read off the mint account at quote time |
-| Quality of execution | Hand-written WebGL2 for the pool surface, no 3D library; unit-tested cost math; every surface measured at 390px and 1280px |
-| Differentiation | 14 public dashboards in this field show the gap; this shows the fill cost before you sign, and then refuses |
+| Real user, real problem | `/census`: the whole field, measured live |
+| Working end-to-end demo | `/`: quote, block, advice, sign; then `/proof` for the landed trade |
+| Belongs on Solana | Jupiter routing, Token-2022 multiplier and transfer fee, issuer powers read from the mint account |
+| Quality of execution | Unit-tested cost math; acceptance scripts in `scripts/`; every page measured at 390px and 1440px |
+| Differentiation | It refuses the trade, and says what to do instead, before you sign |
 
 ## What is proven, and what is not
-- **Tested:** the cost math has unit tests; every mint, decimal and liquidity figure was verified
-  against live Jupiter and RPC responses; all three surfaces measure clean at both widths.
-- **Proven on chain:** `/proof` decodes a real landed mainnet transaction and reconciles it.
-- **Not yet proven:** a signature originated by this app against a funded wallet. Until that runs,
-  the signing path is code-reviewed, not exercised.
+- **Tested:** the cost math has unit tests. The acceptance scripts (`scripts/check-v3.mjs`, `check-v31.mjs`, `check-proof.mjs`) pass against live data.
+- **Proven on chain:** `/proof` reconciles real mainnet trades.
+- **Not yet proven:** a trade signed through this app. _(to be replaced with its signature)_
 
-## Honesty rules this codebase follows
-No figure reaches a surface that was not returned by a call made in that moment. No sample data, no
-placeholder price, no remembered number, no cached fallback. When a call fails the surface says so
-and shows nothing in its place.
+## Honesty rules
+Every figure comes from a call made for it. The only shared reading is `/census`, which is cached for two minutes and shows its age on the page. When a call fails the page says so and shows nothing in its place. The free Jupiter tier allows one request per second, so under load prices arrive more slowly; they are never filled in.

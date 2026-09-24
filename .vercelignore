@@ -1,0 +1,10 @@
+.env*
+.next
+.next-*
+node_modules
+design/shots
+design/proto
+.claude
+.tasks.jsonl
+PROGRESS.md
+*.log
