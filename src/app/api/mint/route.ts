@@ -13,17 +13,25 @@ export async function GET(request: Request) {
   }
 
   try {
-    const res = await fetch(RPC_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "getAccountInfo",
-        params: [mint, { encoding: "jsonParsed" }],
-      }),
-      cache: "no-store",
-    });
+    // The public RPC refuses bursts (429) now and then. Retry with backoff before reporting the read
+    // as failed, so one refusal does not turn into "powers unknown" on the page.
+    let res: Response | null = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 400 * 2 ** attempt));
+      res = await fetch(RPC_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "getAccountInfo",
+          params: [mint, { encoding: "jsonParsed" }],
+        }),
+        cache: "no-store",
+      });
+      if (res.status !== 429 && res.status < 500) break;
+    }
+    if (!res) throw new Error("rpc unreachable");
 
     if (!res.ok) {
       return NextResponse.json({ error: `rpc ${res.status}` }, { status: 502 });
