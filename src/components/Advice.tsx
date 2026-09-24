@@ -199,7 +199,7 @@ export default function Advice({ symbol, amountUsd, limitPct, blocked, noRoute, 
           checking other ways to buy this, live…
         </p>
       )}
-      {!checking && !options.length && (
+      {!checking && !options.length && (quote || noRoute) && (
         <p style={{ fontFamily: "Archivo, sans-serif", fontSize: "14px", color: "var(--text-dim)", margin: 0 }}>
           Nothing cheaper found for this order right now.
         </p>

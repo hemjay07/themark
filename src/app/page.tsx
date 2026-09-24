@@ -306,6 +306,7 @@ export default function Home() {
             noRoute={noRoute}
             selectedStock={selectedToken}
             hasQuote={Boolean(quote)}
+            failed={Boolean(error) && !quote}
           />
         </div>
 
@@ -349,7 +350,8 @@ export default function Home() {
                   )}
                 </div>
               </div>
-            ) : (
+            ) : quote ? (
+              // no live price, no order button: there is nothing to place
               <button
                 onClick={connected ? handleSign : handleConnect}
                 disabled={signing || settling || (connected && !quote)}
@@ -371,21 +373,24 @@ export default function Home() {
               >
                 {!connected ? "Connect a wallet to place this order" : signing ? "Signing…" : settling ? "Waiting for the chain…" : "Place this order"}
               </button>
-            )}
+            ) : null}
           </div>
         </div>
 
         <div className="v3-advice">
-          <Advice
-            symbol={selectedToken}
-            amountUsd={amountNum}
-            limitPct={effectiveLimit}
-            blocked={shouldRefuse}
-            noRoute={noRoute}
-            quote={quote}
-            costByToken={costByToken}
-            onUseAmount={(n) => setAmount(String(n))}
-          />
+          {/* no live price: no advice to give, so no empty card */}
+          {!(error && !quote) && (
+            <Advice
+              symbol={selectedToken}
+              amountUsd={amountNum}
+              limitPct={effectiveLimit}
+              blocked={shouldRefuse}
+              noRoute={noRoute}
+              quote={quote}
+              costByToken={costByToken}
+              onUseAmount={(n) => setAmount(String(n))}
+            />
+          )}
           <IssuerSummary symbol={selectedToken} extensions={mintExt} loading={mintExt === undefined} />
         </div>
       </div>

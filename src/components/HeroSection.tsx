@@ -13,6 +13,8 @@ interface HeroSectionProps {
   noRoute: boolean;
   selectedStock: string;
   hasQuote: boolean;
+  // the quote failed (not just pending): say so instead of "reading"
+  failed?: boolean;
 }
 
 const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
@@ -28,6 +30,7 @@ export default function HeroSection({
   noRoute,
   selectedStock,
   hasQuote,
+  failed,
 }: HeroSectionProps) {
   const name = displayName(selectedStock);
 
@@ -105,7 +108,7 @@ export default function HeroSection({
           ? `No exchange on Solana can fill ${usd(amountUsd)} of ${name} right now.`
           : hasQuote
             ? `extra on your ${usd(amountUsd)} of ${name}`
-            : "reading the market right now"}
+            : failed ? "no live price right now" : "reading the market right now"}
       </div>
 
       <LimitLine
