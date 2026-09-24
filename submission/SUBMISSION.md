@@ -3,7 +3,7 @@
 **One line.** THE MARK shows what a tokenized stock really costs you before you buy it on Solana, and stops the trade if that cost is more than you allow.
 
 ## Links
-- Live demo: _(pending deploy)_
+- Live demo: https://themark-nine.vercel.app
 - Repository: _(pending publish)_
 - Demo video: _(pending)_
 
