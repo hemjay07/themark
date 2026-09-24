@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { getQuote, getSwapTransaction, fetchPrices, rateLimitedRecently, NoRouteError, getMintExtensions } from "@/lib/jupiter";
 import { reconcileTransaction } from "@/lib/tx";
 import { TOKEN_LIST, getTokenBySymbol, USDC_MINT, getToken } from "@/lib/tokens";
-import type { ParsedExtension, QuoteResult, Receipt as ReceiptType } from "@/lib/types";
+import type { ParsedExtension, QuoteResult } from "@/lib/types";
 import Odometer from "@/components/Odometer";
 import HeroSection from "@/components/HeroSection";
 import ControlsSection from "@/components/ControlsSection";
@@ -17,7 +18,7 @@ export default function Home() {
   const [amount, setAmount] = useState("25000");
   const [selectedToken, setSelectedToken] = useState("tOpenAI");
   const [quote, setQuote] = useState<QuoteResult | null>(null);
-  const [receipt, setReceipt] = useState<ReceiptType | null>(null);
+  const router = useRouter();
   const [worstFillPct, setWorstFillPct] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -190,23 +191,9 @@ export default function Home() {
         return;
       }
 
-      setReceipt({
-        txSignature: landed.signature,
-        amountInUsdc: landed.usdcSpent,
-        amountOutTokens: landed.tokenReceived,
-        filledPrice: landed.effectivePrice,
-        referencePrice: landed.referencePrice,
-        costAboveReference: landed.vsShareUsd,
-        costAboveReferencePct: landed.vsSharePct,
-        savedVsWorstCase: ((effectiveLimit - quote.fillCostPct) * landed.usdcSpent) / 100,
-        solscanLink: `https://solscan.io/tx/${landed.signature}`,
-        timestamp: landed.blockTime
-          ? new Date(landed.blockTime * 1000).toISOString()
-          : new Date().toISOString(),
-        tokenSymbol: landed.tokenSymbol,
-        multiplier: quote.multiplier,
-        transferFeePercentage: quote.transferFeePercentage,
-      });
+      // The trade landed. Its receipt is the proof page for this signature: every figure read off
+      // the chain, and a link the person can keep or share.
+      router.push(`/proof?sig=${landed.signature}`);
     } catch (err) {
       // No receipt is ever shown for a transaction that did not land. (charter ban 1)
       console.error("Sign failed:", err);

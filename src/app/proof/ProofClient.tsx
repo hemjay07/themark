@@ -188,12 +188,12 @@ function ReceiptBlock({ result }: { result: TxReconciliation }) {
   );
 }
 
-// A real $550.16 Intel purchase that settled on Solana mainnet at 04:21 UTC on 2026-09-23, found
-// with getSignaturesForAddress on the INTCx mint. It only prefills the input so a visitor can see the
-// feature work; every figure shown for it is read live off the chain at the moment of the check.
-// Intel's balance multiplier is exactly 1, so wallet units and raw units agree for this example.
+// A real $150.93 OpenAI purchase that settled on Solana mainnet at 17:04 UTC on 2026-09-24, found
+// with getSignaturesForAddress on the OpenAI token's mint. Chosen because it overpaid (about $2.82,
+// 1.9%, when read the same day), which is what this page exists to show. It only prefills the input;
+// every figure shown for it is read live off the chain at the moment of the check.
 const EXAMPLE_SIG =
-  "5C36Vdt21D5Y36xeTp6QaceVDsnLSaEum2Hu3fpjPUTkcG4CtTJpkB2jPKKhfj1XUUDrbd9aZhtX1byF5Lutwr6U";
+  "26DWMSrq96WP5BMv7x54jmA9ZC8PjT7CGJVtQ7bE7SwUArZbGWi4TnQ8ByweDCJ6s7MxKewnnPYEwk2TL5osD2aq";
 
 // The receipt code arrives from the server (page.tsx reads ?sig=), so the first paint is already the
 // loading state. Reading it from window.location after mount swapped the empty state for the loading
@@ -352,7 +352,7 @@ export default function ProofClient({ initialSig }: { initialSig: string | null 
                 Check a real trade
               </button>
               <p style={{ ...dimText, marginTop: "12px", fontSize: "11px" }}>
-                a real $550 Intel purchase made on 23 September, read live off the chain
+                a real $150 OpenAI purchase made on 24 September, read live off the chain
               </p>
             </div>
           )}
