@@ -1,6 +1,8 @@
 /* The story page. Scenes snap; entrances are transform and opacity only (PRD-V4 motion rules). */
-html.snap { scroll-snap-type: y mandatory; }
-@media (max-width: 760px), (max-height: 700px) { html.snap { scroll-snap-type: y proximity; } }
+/* no snapping: with it on, a slow wheel scroll from the top kept settling back to the hero, and a
+   pinned section jumped a screen at its end (both measured 2026-09-25). The scenes are still one
+   screen each; the rail's links scroll smoothly. */
+html.snap { scroll-behavior: smooth; }
 
 .stage { position: relative; }
 .stage::before {
@@ -10,22 +12,19 @@ html.snap { scroll-snap-type: y mandatory; }
     linear-gradient(rgba(255,255,255,.028) 1px, transparent 1px) 0 0 / 100% 56px,
     linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px) 0 0 / 56px 100%;
 }
-.scene { min-height: calc(100svh - 62px); scroll-snap-align: start; scroll-margin-top: 62px; display: flex; align-items: center; padding: 56px 24px; }
+.scene { min-height: calc(100svh - 62px); scroll-margin-top: 62px; display: flex; align-items: center; padding: 56px 24px; }
 .scene-inner { width: 100%; max-width: 1240px; margin: 0 auto; }
 
 /* entrances */
-.rv { transform: translateY(28px); transition: transform .8s cubic-bezier(.2,.8,.2,1) var(--d, 0ms); }
+.rv { transform: translateY(22px); transition: transform .55s cubic-bezier(.2,.8,.2,1) min(var(--d, 0ms), 200ms); }
 .scene.in .rv { transform: none; }
-.wipe { position: relative; transform: translateY(24px); transition: transform .9s cubic-bezier(.2,.8,.2,1) var(--d, 0ms); }
-.scene.in .wipe { transform: none; }
-/* a paper cover slides off the heading; the words are there underneath from the first frame */
-.wipe::after { content: ""; position: absolute; inset: -6px -10px; background: var(--bg); transform-origin: right center; transform: scaleX(1); transition: transform 1s cubic-bezier(.2,.8,.2,1) var(--d, 0ms); pointer-events: none; }
-.scene.in .wipe::after { transform: scaleX(0); }
+/* the heading is revealed by its own clip, left to right; no cover, no fade, the words are in the page from the first frame */
+.wipe { transform: translateY(16px); clip-path: inset(-8px 100% -8px 0); transition: transform .6s cubic-bezier(.2,.8,.2,1) min(var(--d, 0ms), 200ms), clip-path .75s cubic-bezier(.2,.8,.2,1) min(var(--d, 0ms), 200ms); }
+.scene.in .wipe { transform: none; clip-path: inset(-8px -2% -8px 0); }
 .scene.in .mega.wipe { letter-spacing: -.035em; }
 .scene.in .big.wipe, .scene.in .num.wipe { letter-spacing: -.025em; }
 @media (prefers-reduced-motion: reduce) {
-  .rv, .wipe, .bar-fill, .duel-bar span { transform: none !important; transition: none !important; }
-  .wipe::after { display: none; }
+  .rv, .wipe, .bar-fill, .duel-bar span { transform: none !important; transition: none !important; clip-path: none !important; }
 }
 
 /* type */
@@ -175,11 +174,19 @@ html.snap { scroll-snap-type: y mandatory; }
 @media (max-width: 760px) { .rail { display: none; } }
 
 /* scene 4: the strip */
-.s-strip { display: block; padding: 0; min-height: 0; height: calc((100svh - 62px) + 1500px); }
-.strip-stage { position: sticky; top: 62px; height: calc(100svh - 62px); display: flex; flex-direction: column; justify-content: center; gap: 28px; overflow: hidden; padding: 40px 0; }
+.s-strip { display: block; padding: 0; min-height: calc(100svh - 62px); }
+.strip-stage { min-height: calc(100svh - 62px); display: flex; flex-direction: column; justify-content: center; gap: 24px; padding: 48px 0; }
 .strip-head { padding: 0 24px; }
-.strip-rail { width: 100%; }
-.strip { display: flex; gap: 18px; padding: 0 24px; will-change: transform; width: max-content; }
+.strip-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 24px; max-width: 1240px; margin: 0 auto; width: 100%; }
+.strip-hint { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); }
+.strip-arrows { display: flex; gap: 8px; }
+.strip-arrows button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); background: transparent; color: var(--text-primary); font-size: 18px; cursor: pointer; transition: border-color .16s ease-out, transform .16s ease-out; }
+.strip-arrows button:hover { border-color: var(--text-dim); transform: translateY(-1px); }
+/* the rail scrolls sideways under the finger or the wheel, and settles stub by stub */
+.strip-rail { width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.strip-rail::-webkit-scrollbar { display: none; }
+.strip { display: flex; gap: 18px; padding: 4px 24px 24px; width: max-content; }
+.stub-card { scroll-snap-align: start; }
 .stub-card { position: relative; flex: 0 0 auto; width: 300px; min-height: 250px; background: #F3EEE2; color: #17140F; border-radius: 4px; padding: 20px 22px 22px; text-decoration: none;
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), 96% 100%, 92% calc(100% - 8px), 88% 100%, 84% calc(100% - 8px), 80% 100%, 76% calc(100% - 8px), 72% 100%, 68% calc(100% - 8px), 64% 100%, 60% calc(100% - 8px), 56% 100%, 52% calc(100% - 8px), 48% 100%, 44% calc(100% - 8px), 40% 100%, 36% calc(100% - 8px), 32% 100%, 28% calc(100% - 8px), 24% 100%, 20% calc(100% - 8px), 16% 100%, 12% calc(100% - 8px), 8% 100%, 4% calc(100% - 8px), 0 100%);
   transform: rotate(calc(-.8deg + var(--i, 0) * .25deg)) translateY(28px); transition: transform .8s cubic-bezier(.2,.8,.2,1) calc(var(--i, 0) * 60ms); }
@@ -201,10 +208,6 @@ html.snap { scroll-snap-type: y mandatory; }
 .stub-card.is-link .sc-name { font-size: 22px; line-height: 1.15; }
 .sc-cta { font-family: Archivo, sans-serif; font-weight: 600; font-size: 15px; color: #F3EEE2; }
 @media (max-width: 760px) {
-  .s-strip { height: auto; }
-  .strip-stage { position: static; height: auto; overflow: visible; }
-  .strip-rail { overflow-x: auto; scrollbar-width: none; }
-  .strip-rail::-webkit-scrollbar { display: none; }
-  .strip { transform: none !important; }
   .stub-card { width: 260px; min-height: 230px; }
+  .strip-arrows { display: none; }
 }

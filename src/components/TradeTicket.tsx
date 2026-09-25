@@ -194,7 +194,7 @@ export const TICKET_CSS = TEAR_CSS + `
 .lt-ticket .tk-foot{min-height:0}
 .tk-line{position:relative}
 @media (max-width:640px){.tk-line{padding-bottom:46px}.tk-stamp{bottom:0}}
-@media (min-width:901px){.tk-line .tk-stamp{bottom:auto;top:-128px;right:6px}.lt-ticket .tk-line .tk-stamp{top:-108px}}
+@media (min-width:901px){.tk-line .tk-stamp{bottom:auto;top:-128px;right:6px}.lt-ticket .tk-line .tk-stamp{top:auto;bottom:4px;right:0}}
 .tk-stamp.is-watch{color:#17140F;border-color:#17140F}
 .tk-stamp.is-clear{color:#0B7A3B;border-color:#0B7A3B}
 .tk-stamp{position:absolute;right:0;bottom:4px;z-index:5;pointer-events:none;

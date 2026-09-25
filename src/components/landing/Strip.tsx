@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { useInView } from "@/lib/useInView";
 import type { Row, Gap } from "@/components/landing/Scenes";
 
@@ -8,42 +8,14 @@ const ORDER = 25000;
 const LIMIT = 1;
 const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
-// Scene 4: the field as a strip of paper stubs, one per stock, that slides across as the reader scrolls
-// down. On a wide screen the scene is pinned while the strip moves; on a phone the strip scrolls
-// sideways under the finger. Every stub carries the live cost of $25,000 of that stock and the stamp
-// it earns against a 1% line. Movement only: the stubs are in the page from the first frame.
+// Scene 4: the field as a strip of paper stubs, one per stock, on a rail that scrolls sideways under
+// the finger, the wheel or the arrows, and settles stub by stub. A pinned, scroll-driven version
+// stuttered against the page's snapping (2026-09-25), so the rail is native. Every stub carries the
+// live cost of $25,000 of that stock and the stamp it earns against a 1% line.
 export default function SceneField({ rows, gaps, readAt }: { rows: Row[]; gaps: Gap[]; readAt: number | null }) {
-  const { ref, inView } = useInView<HTMLElement>(0.05);
-  const strip = useRef<HTMLDivElement>(null);
-  const [sx, setSx] = useState(0);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const wide = matchMedia("(min-width: 761px)");
-    let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        if (!wide.matches || !strip.current) return setSx(0);
-        const stage = innerHeight - 62;
-        const top = el.getBoundingClientRect().top + scrollY;
-        const travel = el.offsetHeight - stage;
-        const p = Math.max(0, Math.min(1, (scrollY - top) / travel));
-        const over = strip.current.scrollWidth - innerWidth + 48;
-        setSx(-Math.max(0, over) * p);
-      });
-    };
-    onScroll();
-    addEventListener("scroll", onScroll, { passive: true });
-    addEventListener("resize", onScroll);
-    return () => {
-      removeEventListener("scroll", onScroll);
-      removeEventListener("resize", onScroll);
-      cancelAnimationFrame(raf);
-    };
-  }, [ref, rows.length]);
-
+  const { ref, inView } = useInView<HTMLElement>(0.2);
+  const rail = useRef<HTMLDivElement>(null);
+  const by = (dir: 1 | -1) => rail.current?.scrollBy({ left: dir * 336, behavior: "smooth" });
   return (
     <section id="field" ref={ref} data-scene={4} className={`scene s-strip${inView ? " in" : ""}`}>
       <div className="strip-stage">
@@ -57,12 +29,19 @@ export default function SceneField({ rows, gaps, readAt }: { rows: Row[]; gaps: 
             <span className="dim">Very different bills.</span>
           </h2>
           <p className="body rv" style={{ ["--d" as string]: "140ms" }}>
-            Every stock, the same order, read live and stamped against a 1% line. Scroll on.
+            Every stock, the same order, read live and stamped against a 1% line.
             {readAt ? ` Read ${Math.max(0, Math.round((Date.now() - readAt) / 60000))} min ago, refreshed every 2.` : ""}
           </p>
         </div>
-        <div className="strip-rail" data-scrolls>
-          <div className="strip" ref={strip} style={{ transform: `translate3d(${sx}px,0,0)` }}>
+        <div className="strip-bar">
+          <span className="strip-hint">Scroll sideways, or drag</span>
+          <div className="strip-arrows">
+            <button type="button" aria-label="Previous stocks" onClick={() => by(-1)}>←</button>
+            <button type="button" aria-label="Next stocks" onClick={() => by(1)}>→</button>
+          </div>
+        </div>
+        <div className="strip-rail" data-scrolls ref={rail}>
+          <div className="strip">
             {rows.length === 0 && gaps.length === 0 && (
               <article className="stub-card is-wait" data-card>
                 <div className="sc-k">reading</div>
