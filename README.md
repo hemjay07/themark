@@ -4,7 +4,7 @@ What a tokenized stock really costs you before you buy it on Solana, and a stop 
 
 **Live: [themark-nine.vercel.app](https://themark-nine.vercel.app)**
 
-![The order ticket, stamped BLOCKED](docs/images/landing.png)
+![The order ticket, stamped BLOCKED](docs/images/home-fold.png)
 
 Tokenized stocks trade in pools that are thin at the wrong hours. A chart shows the token's price. It does not show what your order costs to fill: the price moving against you in the pool, plus the transfer fee some tokens charge on every move. On 22 September 2026 the gap between token and share was a median 0.20% across 20 pairs, while a $25,000 order cost between 0.06% and 2.56% to fill. The fill is where the money goes.
 
@@ -12,7 +12,7 @@ Tokenized stocks trade in pools that are thin at the wrong hours. A chart shows 
 
 | Check an order | Compare stocks | Verify a trade |
 |---|---|---|
-| ![Check](docs/images/check.png) | ![Compare](docs/images/compare.png) | ![Verify](docs/images/verify.png) |
+| ![Check](docs/images/check-ticket.png) | ![Compare](docs/images/compare-field.png) | ![Verify](docs/images/verify-receipt.png) |
 
 - **Check an order.** The ticket is the app: pick a stock, set the amount and your limit on the line. Over the limit it is stamped BLOCKED and never reaches your wallet. One click cuts it to the largest size that fits, or leave it open and it re-quotes every 30 seconds until it clears.
 - **Compare stocks.** Every stock at $500, $5,000 and $25,000, drawn against the limit you set. Green clears, red goes over.
@@ -45,4 +45,4 @@ Both environment variables are optional: `JUPITER_API_KEY` (free, from the Jupit
 
 Next.js 14 and TypeScript. Quotes from Jupiter, chain reads over Solana JSON-RPC, signing through Phantom. Hosted on Vercel.
 
-Made for the [Stocklana](https://stocklana.com) hackathon (tokenized stocks on Solana). MIT.
+Made for the [Stocklana](https://hackathons.solana.com/hackathons/stocklana) hackathon (tokenized stocks on Solana). MIT.
