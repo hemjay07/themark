@@ -4,7 +4,7 @@
 
 ## Links
 - Live demo: https://themark-nine.vercel.app
-- Repository: _(pending publish)_
+- Repository: https://github.com/hemjay07/themark
 - Demo video: _(pending)_
 
 ## What it does
