@@ -219,6 +219,8 @@ export default function ProofClient({ initialSig, initialWallet = null }: { init
   const [result, setResult] = useState<TxReconciliation | null>(null);
   const [loading, setLoading] = useState(Boolean(initialSig));
   const [error, setError] = useState("");
+  // input that is neither a wallet nor a receipt code: refused here, before the chain is asked
+  const [bad, setBad] = useState("");
   const [findings, setFindings] = useState<MintFinding[]>(
     TOKEN_LIST.map((t) => ({ symbol: t.symbol, mint: t.mint, multiplier: null, transferFeePct: null, controls: null, loading: true }))
   );
@@ -275,10 +277,16 @@ export default function ProofClient({ initialSig, initialWallet = null }: { init
     const trimmed = sigInput.trim();
     if (!trimmed) return;
     if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed)) {
+      setBad("");
       setSignature(null);
       setWallet(trimmed);
       return;
     }
+    if (!/^[1-9A-HJ-NP-Za-km-z]{64,90}$/.test(trimmed)) {
+      setBad("That is not a wallet address or a trade's receipt code. A wallet address is 32 to 44 letters and digits; a receipt code is 64 to 90. Both come from your wallet or from Solscan.");
+      return;
+    }
+    setBad("");
     setWallet(null);
     setSignature(trimmed);
   };
@@ -412,6 +420,13 @@ export default function ProofClient({ initialSig, initialWallet = null }: { init
           )}
 
           {signature && loading && <p style={dimText}>reading {shortSig(signature)} off mainnet…</p>}
+
+          {bad && (
+            <div style={{ border: "1px solid var(--signal)", borderRadius: "4px", padding: "16px", background: "rgba(196, 38, 29, 0.06)", marginBottom: "16px" }}>
+              <div style={{ ...microLabelSmall, color: "var(--signal)" }}>not checked</div>
+              <p style={{ ...mono, color: "var(--text-primary)", fontSize: "13px", lineHeight: 1.5 }}>{bad}</p>
+            </div>
+          )}
 
           {signature && !loading && error && (
             <div

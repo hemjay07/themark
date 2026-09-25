@@ -205,7 +205,7 @@ export default function WalletBlock({ address }: { address: string }) {
 const WB_CSS = `
 .wb{animation:proof-arrive 320ms cubic-bezier(.23,1,.32,1)}
 .wb-k{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px}
-.wb-top{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin:6px 0 12px}
+.wb-top{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin:6px 0 22px}
 .wb-num{font-family:"JetBrains Mono",monospace;font-weight:600;font-size:clamp(52px,10vw,120px);line-height:1;min-height:1em;letter-spacing:-.02em}
 .wb-stamp{font-family:Archivo,sans-serif;font-weight:800;font-size:clamp(18px,2.4vw,30px);letter-spacing:.12em;color:#C4261D;border:4px double #C4261D;border-radius:6px;padding:6px 14px 4px;transform:rotate(-7deg);opacity:.9;animation:tk-slam .46s cubic-bezier(.2,1.3,.35,1) both}
 .wb-stamp.is-clear{color:#0B7A3B;border-color:#0B7A3B}
