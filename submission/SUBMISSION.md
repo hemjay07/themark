@@ -5,7 +5,7 @@
 ## Links
 - Live demo: https://themark-nine.vercel.app
 - Repository: https://github.com/hemjay07/themark
-- Demo video: _(pending)_
+- Demo video: https://youtu.be/5kyckiNkx-k
 
 ## What it does
 1. **The story** (`/`). Nine screens, one statement each, every figure live: the ticket printed, blocked, cut and cleared; the same $25,000 order across all eight stocks as a strip of stubs; the count of tokens whose issuer can take them from your wallet; a real purchase priced off the chain.
