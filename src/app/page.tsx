@@ -5,7 +5,8 @@ import { useEffect } from "react";
 import { TOKEN_LIST, displayName } from "@/lib/tokens";
 import { useCensus } from "@/lib/useCensus";
 import { TICKET_CSS } from "@/components/TradeTicket";
-import { SceneHero, SceneCost, SceneMoves, SceneField, SceneStamp, SceneInstead, type Row, type Gap } from "@/components/landing/Scenes";
+import { SceneHero, SceneCost, SceneMoves, SceneStamp, SceneInstead, type Row, type Gap, type Fit } from "@/components/landing/Scenes";
+import SceneField from "@/components/landing/Strip";
 import { SceneIssuer, SceneWallet, SceneAnswers } from "@/components/landing/Scenes2";
 import Rail from "@/components/landing/Rail";
 
@@ -33,6 +34,15 @@ export default function Landing() {
   const worstMint = worst ? TOKEN_LIST.find((t) => t.symbol === worst.symbol)?.mint : undefined;
   const c5 = worstMint ? census?.cells?.[worstMint]?.["5000"] : undefined;
   const worst5k = c5 && c5.ok ? c5.pct : null;
+  // the largest census size of the costliest stock that fits under the 1% line, for the hero's cut
+  const fit: Fit | null = (() => {
+    if (!worstMint) return null;
+    for (const key of ["5000", "500"]) {
+      const c = census?.cells?.[worstMint]?.[key];
+      if (c && c.ok && c.pct <= 1) return { usd: Number(key), pct: c.pct };
+    }
+    return null;
+  })();
 
   // scenes snap while this page is open, and only then
   useEffect(() => {
@@ -43,7 +53,7 @@ export default function Landing() {
   return (
     <main className="stage">
       <style dangerouslySetInnerHTML={{ __html: TICKET_CSS }} />
-      <SceneHero worst={worst} best={best} />
+      <SceneHero worst={worst} fit={fit} rows={rows} />
       <SceneCost worst={worst} />
       <SceneMoves />
       <SceneField rows={rows} gaps={gaps} readAt={census?.readAt ?? null} />

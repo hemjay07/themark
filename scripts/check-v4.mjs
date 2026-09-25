@@ -32,11 +32,13 @@ for (const width of [1440, 390]) {
       heads: [...document.querySelectorAll("[data-scene] h1, [data-scene] h2")].filter((h) => h.getBoundingClientRect().width > 0).length,
       launchNav: [...document.querySelectorAll("nav a")].some((a) => /launch app/i.test(a.innerText) && a.getAttribute("href") === "/check"),
       launchLast: [...document.querySelectorAll("#answers a")].some((a) => /launch app/i.test(a.innerText) && a.getAttribute("href") === "/check"),
-      bars: document.querySelectorAll("#field .bar-row").length,
+      // scene 4 is a strip of stubs since PRD-V5's creative pass; the old bars live on /census
+      bars: document.querySelectorAll("#field [data-card]:not(.is-link):not(.is-wait)").length,
       firstReading: /first reading/i.test(document.querySelector("#field")?.innerText ?? ""),
       issuerCount: /\d+\s*of\s*8/.test(document.querySelector("#issuer")?.innerText ?? ""),
       scrollW: document.documentElement.scrollWidth,
-      hasNav: /check/i.test(nav) && /compare/i.test(nav) && /verify/i.test(nav),
+      // PRD-V5: the story's nav is its sections; the app's nav is checked by check-v5 #4
+      hasNav: /how/i.test(nav) && /field/i.test(nav) && /(wallet|were you the mark)/i.test(nav),
       walletInput: !!document.querySelector("#wallet input"),
     };
   });

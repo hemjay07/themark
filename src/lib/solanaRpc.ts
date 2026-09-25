@@ -25,6 +25,7 @@ export async function rpc<T = any>(method: string, params: unknown[]): Promise<T
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
         cache: "no-store",
+        signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) {
         lastErr = `rpc ${res.status}`;
@@ -32,13 +33,17 @@ export async function rpc<T = any>(method: string, params: unknown[]): Promise<T
       }
       const data = await res.json();
       if (data.error) {
-        // a throttle, a paywall or any other refusal: the next endpoint gets the same question
+        // a refusal that no endpoint will answer differently (an unsupported transaction version, a
+        // bad parameter) is final; a throttle or a paywall sends the question to the next endpoint
+        if (data.error.code === -32015 || data.error.code === -32602) throw new Error(String(data.error.message || "rpc error"));
         lastErr = String(data.error.message || "rpc error");
         continue;
       }
       return data.result as T;
     } catch (e) {
-      lastErr = e instanceof Error ? e.message : String(e);
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/not supported|Invalid param/i.test(msg)) throw e;
+      lastErr = msg;
     }
   }
   throw new Error(lastErr);

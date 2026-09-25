@@ -17,6 +17,10 @@ interface AdviceProps {
   onUseAmount?: (usd: number) => void;
   // the size that passed, reported up so the page can offer it where the order is placed
   onLead?: (usd: number | null) => void;
+  // stubs mode: only the split and the cheaper stock, as torn stubs; the cut is on the ticket itself
+  stubs?: boolean;
+  // whether the search for a size that fits is still running
+  onSearching?: (b: boolean) => void;
 }
 
 type Option = { key: string; text: string; useAmount?: number; saving?: string };
@@ -28,7 +32,7 @@ const usd = (n: number) =>
 // Every dollar figure here is the answer to a quote made after the main quote landed; nothing is
 // estimated onto the screen. The "buy less" amount is estimated, then CHECKED with a live quote, and
 // only shown if the check passes. (design/PRD-V3.md R2)
-export default function Advice({ symbol, amountUsd, limitPct, blocked, noRoute, quote, costByToken, onUseAmount, onLead }: AdviceProps) {
+export default function Advice({ symbol, amountUsd, limitPct, blocked, noRoute, quote, costByToken, onUseAmount, onLead, stubs, onSearching }: AdviceProps) {
   const [split, setSplit] = useState<Option | null>(null);
   const [less, setLess] = useState<Option | null>(null);
   const [checking, setChecking] = useState(false);
@@ -37,6 +41,10 @@ export default function Advice({ symbol, amountUsd, limitPct, blocked, noRoute, 
     onLead?.(less?.useAmount ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [less]);
+  useEffect(() => {
+    onSearching?.(checking);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checking]);
   const mint = getTokenBySymbol(symbol)?.mint;
 
   useEffect(() => {
@@ -147,16 +155,16 @@ export default function Advice({ symbol, amountUsd, limitPct, blocked, noRoute, 
     };
   }
 
-  const options = [less, split, compare].filter((o): o is Option => o !== null);
+  const options = (stubs ? [split, compare] : [less, split, compare]).filter((o): o is Option => o !== null);
 
   return (
-    <section data-advice className={`ad${blocked ? " is-blocked" : ""}`}>
+    <section data-advice className={`ad${blocked ? " is-blocked" : ""}${stubs ? " is-stubs" : ""}`}>
       <style dangerouslySetInnerHTML={{ __html: ADVICE_CSS }} />
-      <h2 className="ad-h">{blocked ? "What you can do instead" : "Ways to pay less"}</h2>
+      <h2 className="ad-h">{stubs ? "Other ways out" : blocked ? "What you can do instead" : "Ways to pay less"}</h2>
       {options.length > 0 && (
         <ul className="ad-list">
           {options.map((o, i) => (
-            <li key={o.key} className={`ad-stub${o.useAmount ? " is-lead" : ""}`} style={{ animationDelay: `${i * 90}ms` }}>
+            <li key={o.key} data-stub className={`ad-stub${o.useAmount ? " is-lead" : ""}`} style={{ animationDelay: `${i * 90}ms` }}>
               {o.saving && <span className="ad-save">{o.saving}</span>}
               <span className="ad-text">{o.text}</span>
               {o.useAmount && onUseAmount && (
@@ -186,6 +194,14 @@ export default function Advice({ symbol, amountUsd, limitPct, blocked, noRoute, 
 // does not jump, and each answer slides in toward the ticket as it lands.
 const ADVICE_CSS = `
 .ad{min-height:132px}.ad.is-blocked{min-height:250px}
+.ad.is-stubs{min-height:0}.ad.is-stubs .ad-h{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);font-weight:400;margin:0 0 10px}
+.ad.is-stubs .ad-stub{background:#F3EEE2;color:#17140F;border:none;border-radius:2px 2px 6px 6px;padding:18px 18px 16px 20px;
+  clip-path:polygon(0 8px,3% 0,7% 8px,11% 0,15% 8px,19% 0,23% 8px,27% 0,31% 8px,35% 0,39% 8px,43% 0,47% 8px,51% 0,55% 8px,59% 0,63% 8px,67% 0,71% 8px,75% 0,79% 8px,83% 0,87% 8px,91% 0,95% 8px,100% 0,100% 100%,0 100%);
+  transform:rotate(-.6deg)}
+.ad.is-stubs .ad-stub:nth-child(2){transform:rotate(.7deg)}
+.ad.is-stubs .ad-stub::before{display:none}
+.ad.is-stubs .ad-save{color:#0B7A3B;font-size:22px}
+.ad.is-stubs .ad-text{color:#4B463C;font-size:14px}
 .ad-h{font-family:Archivo,sans-serif;font-weight:600;font-size:20px;color:var(--text-primary);margin:0 0 14px}
 .ad-list{list-style:none;padding:0;margin:0;display:grid;gap:12px}
 .ad-stub{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:10px;

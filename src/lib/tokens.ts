@@ -26,10 +26,26 @@ export function referencePriceFor(
   price: { usdPrice: number; stockData?: { price: number } } | undefined
 ): { price: number | null; kind: "share" | "token" } {
   const finite = (n: unknown) => (typeof n === "number" && Number.isFinite(n) ? n : null);
-  if (!price) return { price: null, kind: "share" };
   const t = getToken(mint);
-  if (t && !t.listed) return { price: finite(price.usdPrice), kind: "token" };
-  return { price: finite(price.stockData?.price ?? price.usdPrice), kind: "share" };
+  // a token this app does not list has no reference here: refuse rather than label it a share
+  if (!price || !t) return { price: null, kind: "share" };
+  if (!t.listed) return { price: finite(price.usdPrice), kind: "token" };
+  // a public company's token with no share price in the feed is refused, not silently priced as itself
+  return { price: finite(price.stockData?.price), kind: "share" };
+}
+
+// The balance multiplier a scaled-balance token carries, from the price feed, as getQuote resolves it:
+// the new one once it is in force. Null when the feed gave nothing, so a caller refuses rather than
+// prints an unscaled share count.
+export function multiplierFromFeed(
+  price: { scaledUiConfig?: { multiplier: number; newMultiplier?: number; newMultiplierEffectiveAt?: string } } | undefined
+): number | null {
+  if (!price) return null;
+  const cfg = price.scaledUiConfig;
+  if (!cfg) return 1;
+  const at = cfg.newMultiplierEffectiveAt ? Date.parse(cfg.newMultiplierEffectiveAt) / 1000 : null;
+  if (typeof cfg.newMultiplier === "number" && at !== null && Date.now() / 1000 >= at) return cfg.newMultiplier;
+  return typeof cfg.multiplier === "number" ? cfg.multiplier : 1;
 }
 
 export function getToken(mint: string): Token | undefined {

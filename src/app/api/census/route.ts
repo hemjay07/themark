@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { rpc } from "@/lib/solanaRpc";
 import { unstable_cache } from "next/cache";
 import { jupGet } from "@/lib/jupServer";
 import { TOKEN_LIST, USDC_MINT } from "@/lib/tokens";
@@ -15,7 +16,6 @@ export const maxDuration = 60;
 // seconds to fill, so a judge saw empty rows; the founder chose not to pay for a higher plan. Every
 // figure is still the answer to a live call; what changes is that it is labelled with when that call
 // was made. The instrument on / stays live per order. Recorded in design/CHARTER.md.
-const RPC_URL = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
 
 type Cell = { ok: true; pct: number } | { ok: false; reason: string };
 type Snapshot = {
@@ -26,15 +26,10 @@ type Snapshot = {
 
 async function transferFeePct(mint: string): Promise<number | null> {
   try {
-    const res = await fetch(RPC_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getAccountInfo", params: [mint, { encoding: "jsonParsed" }] }),
-      cache: "no-store",
-    });
-    const data = await res.json();
-    if (data.error || !data.result?.value) return null;
-    const ext: Array<{ extension: string; state: any }> = data.result.value.data?.parsed?.info?.extensions ?? [];
+    // through the shared helper: it rotates endpoints, so one refusal is not a "fee could not be read"
+    const result = await rpc<{ value: any } | null>("getAccountInfo", [mint, { encoding: "jsonParsed" }]);
+    if (!result?.value) return null;
+    const ext: Array<{ extension: string; state: any }> = result.value.data?.parsed?.info?.extensions ?? [];
     const bps = ext.find((e) => e.extension === "transferFeeConfig")?.state?.newerTransferFee?.transferFeeBasisPoints;
     return typeof bps === "number" ? bps / 100 : 0;
   } catch {
@@ -42,7 +37,21 @@ async function transferFeePct(mint: string): Promise<number | null> {
   }
 }
 
+// A refresh that ran into the rate limit must not replace a good reading with a page of "quote 429"
+// for two minutes. The better of the new reading and the last good one is what gets cached.
+let lastGood: Snapshot | null = null;
+const okCells = (s: Snapshot) => Object.values(s.cells).flatMap((r) => Object.values(r)).filter((c) => c.ok).length;
+
 async function takeReading(): Promise<Snapshot> {
+  const fresh = await readEverything();
+  if (lastGood && okCells(fresh) < okCells(lastGood) && Date.now() - (lastGood.finishedAt ?? 0) < 10 * 60_000) {
+    return lastGood;
+  }
+  lastGood = fresh;
+  return fresh;
+}
+
+async function readEverything(): Promise<Snapshot> {
   const snap: Snapshot = { startedAt: Date.now(), finishedAt: null, cells: {} };
   for (const token of TOKEN_LIST) {
     snap.cells[token.mint] = {};

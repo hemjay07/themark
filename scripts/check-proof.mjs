@@ -7,7 +7,7 @@ const base = process.argv[2] || "http://localhost:3000";
 const b = await chromium.launch({ channel: "chrome" }).catch(() => chromium.launch());
 const p = await (await b.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
 await p.goto(base + "/proof", { waitUntil: "domcontentloaded", timeout: 45000 });
-await p.getByText("Check a real trade", { exact: false }).click();
+// since PRD-V5 the real example trade prints on load; nothing to click
 let ok = false, text = "";
 for (let i = 0; i < 30 && !ok; i++) {
   await p.waitForTimeout(1000);

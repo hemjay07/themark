@@ -19,7 +19,9 @@ export default function Rail({ ids }: { ids: string[] }) {
   return (
     <nav className="rail" aria-label="Sections">
       {ids.map((id, i) => (
-        <a key={id} href={`#${id}`} className={i === on ? "on" : ""} aria-label={`Section ${i + 1}`} aria-current={i === on ? "true" : undefined} />
+        <a key={id} href={`#${id}`} className={i === on ? "on" : ""} aria-label={`Section ${i + 1}`} aria-current={i === on ? "true" : undefined}>
+          {String(i + 1).padStart(2, "0")}
+        </a>
       ))}
     </nav>
   );

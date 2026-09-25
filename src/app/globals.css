@@ -30,7 +30,8 @@
 
 html, body {
   width: 100%;
-  overflow-x: hidden;
+  /* clip, not hidden: hidden makes the body a scroll container and breaks position: sticky */
+  overflow-x: clip;
 }
 
 body {

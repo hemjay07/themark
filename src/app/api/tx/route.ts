@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "signature is required" }, { status: 400 });
   }
   try {
-    const result = await rpc<any>("getTransaction", [signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]);
+    const result = await rpc<any>("getTransaction", [signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1 }]);
     if (!result) {
       return NextResponse.json({ error: "signature not found on mainnet" }, { status: 404 });
     }

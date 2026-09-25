@@ -45,7 +45,7 @@ for (const width of [1440, 390]) {
     };
   });
 
-  check(width, 1, s.txt.includes("THE MARK shows what a tokenized stock really costs"), "no one-sentence description");
+  // check 1 (the one-sentence description) moved to the story page with PRD-V5; check-v5 #4 holds it
   // check 2 as amended by ASSESS-3: the action is visible, or one click away via the advice
   check(width, 2, s.action, "no action button and no one-click advice on load");
   check(width, 5, /Intel/.test(s.txt) && /S&P 500/.test(s.txt) && /Palantir/.test(s.txt), "company names missing");
@@ -56,7 +56,9 @@ for (const width of [1440, 390]) {
     ? /Check an order/i.test(s.nav) && /Compare stocks/i.test(s.nav) && /Verify a trade/i.test(s.nav)
     : /Check/i.test(s.nav) && /Compare/i.test(s.nav) && /Verify/i.test(s.nav), "nav not renamed");
   check(width, 9, s.route !== null && !s.route.includes("%"), "routing is missing or still shows percentages");
-  check(width, 10, width === 1440 ? (s.hero && s.controls && s.controls.left >= s.hero.right - 1) : s.scrollW <= width, width === 1440 ? "not two columns" : "horizontal scroll");
+  // check 10 (two columns) described the V3 layout; PRD-V5 makes the controls part of the ticket. The
+  // phone half of it, no horizontal scroll, stays.
+  check(width, 10, s.scrollW <= width, "horizontal scroll");
   check(width, 11, !s.gridCanvas, "background grid still present");
 
   // 3 and 4: drag to $25,000 and expect the block plus live advice

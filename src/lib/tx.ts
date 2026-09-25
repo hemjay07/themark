@@ -1,4 +1,4 @@
-import { USDC_MINT, getToken, referencePriceFor } from "./tokens";
+import { USDC_MINT, getToken, referencePriceFor, multiplierFromFeed } from "./tokens";
 import { fetchPrices } from "./jupiter";
 
 // A single token account's balance move for one owner across a transaction, read straight off
@@ -72,8 +72,10 @@ export function balanceChanges(tx: any, owner: string): TxBalanceChange[] {
     const decimals = postB?.uiTokenAmount?.decimals ?? preB?.uiTokenAmount?.decimals;
     if (typeof mint !== "string" || typeof decimals !== "number") continue;
 
-    const preAmt = preB?.uiTokenAmount?.uiAmount ?? 0;
-    const postAmt = postB?.uiTokenAmount?.uiAmount ?? 0;
+    // raw base units: the record's uiAmount is not scaled by a Token-2022 balance multiplier
+    // (checked on SPYx, 2026-09-25), so the multiplier is applied once, later, from the feed
+    const preAmt = Number(preB?.uiTokenAmount?.amount ?? 0) / 10 ** decimals;
+    const postAmt = Number(postB?.uiTokenAmount?.amount ?? 0) / 10 ** decimals;
     rows.push({ mint, decimals, delta: postAmt - preAmt });
   }
   return rows;
@@ -98,25 +100,31 @@ export async function reconcileTransaction(signature: string): Promise<TxReconci
   const spent = changes
     .filter((c) => c.mint === USDC_MINT && c.delta < 0)
     .sort((a, b) => a.delta - b.delta)[0];
-  const received = changes
-    .filter((c) => c.mint !== USDC_MINT && c.delta > 0)
-    .sort((a, b) => b.delta - a.delta)[0];
+  // only the stocks this app lists, and exactly one of them: a basket or a stock-to-stock swap
+  // cannot be priced as one purchase
+  const listedIn = changes.filter((c) => c.mint !== USDC_MINT && c.delta > 0 && getToken(c.mint));
+  if (listedIn.length > 1) {
+    throw new Error("this signature moves more than one listed stock, so it is not one purchase to price");
+  }
+  const received = listedIn[0];
   if (!spent || !received) {
-    throw new Error("this signature has no USDC-in, token-out swap for its signer");
+    throw new Error("this signature has no USDC-in, listed-stock-out swap for its signer");
   }
 
   const usdcSpent = Math.abs(spent.delta);
-  const tokenReceived = received.delta;
-  if (usdcSpent <= 0 || tokenReceived <= 0) {
+  if (usdcSpent <= 0 || received.delta <= 0) {
     throw new Error("the balance change on this signature is zero; nothing to reconcile");
   }
-  const effectivePrice = usdcSpent / tokenReceived;
 
   const prices = await fetchPrices([received.mint]);
   const { price: referencePrice, kind: referenceKind } = referencePriceFor(received.mint, prices[received.mint]);
-  if (referencePrice === null) {
+  const multiplier = multiplierFromFeed(prices[received.mint]);
+  if (referencePrice === null || multiplier === null) {
     throw new Error("no live reference price for this mint right now; refusing to reconcile");
   }
+  // shares: the units received, scaled by the token's balance multiplier
+  const tokenReceived = received.delta * multiplier;
+  const effectivePrice = usdcSpent / tokenReceived;
 
   // This nets the token/share basis off the impact, so it can be either sign. It is NOT the
   // fill cost, which is what the route charges and is never negative. Naming it fillCost put a

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { useTicketCut } from "@/components/TicketCut";
 import LimitLine from "@/components/LimitLine";
 import Odometer from "@/components/Odometer";
 import Scene from "@/components/landing/Scene";
@@ -15,57 +16,109 @@ const pctOrNothing = (p: number) => (p < 0.005 ? "almost nothing" : `${p.toFixed
 const ORDER = 25000;
 const LIMIT = 1;
 
-// A paper ticket for one stock at $25,000 against a 1% line, stamped by its live census cost.
-export function PaperTicket({ row }: { row: Row | null }) {
-  const blocked = row ? row.pct > LIMIT : false;
-  const cost = row ? (row.pct / 100) * ORDER : 0;
+export type Fit = { usd: number; pct: number };
+type PaperHandle = { cut: () => void };
+
+// A paper ticket for one stock against a 1% line, stamped by its live census cost. `fit` prints it at
+// the smaller size that fits instead of the full $25,000.
+export const PaperTicket = forwardRef<PaperHandle, { row: Row | null; fit?: Fit | null }>(function PaperTicket({ row, fit }, handle) {
+  const size = fit ? fit.usd : ORDER;
+  const pct = fit ? fit.pct : row?.pct ?? 0;
+  const blocked = row ? pct > LIMIT : false;
+  const cost = row ? (pct / 100) * size : 0;
+  const art = useRef<HTMLElement>(null);
+  const { cut, overlay } = useTicketCut(art);
+  useImperativeHandle(handle, () => ({ cut }), [cut]);
   return (
-    <article className="ticket lt-ticket">
+    <div className="tk-wrap">
+    <article className="ticket lt-ticket" ref={art}>
       <header className="tk-head">
         <span>Order ticket</span>
         <span>Buy with USDC</span>
       </header>
       <div className="tk-order">
         <span className="tk-stock">{row ? row.name : "…"}</span>
-        <span className="tk-amt">{usd(ORDER)}</span>
+        <span className="tk-amt"><Odometer value={size} decimals={0} prefix="$" /></span>
       </div>
       <hr className="tk-perf" />
       <div className="tk-label">What this order costs you</div>
       <div className={`tk-cost${blocked ? " is-blocked" : ""}`}>
         {row ? <Odometer key={row.symbol} value={cost} prefix="$" durationMs={520} /> : <span className="tk-shimmer" />}
       </div>
-      <div className="tk-sub">{row ? `extra, ${row.pct.toFixed(2)}% of what you spend` : "reading the market"}</div>
+      <div className="tk-sub">{row ? `extra, ${pct.toFixed(2)}% of what you spend` : "reading the market"}</div>
       <div className="tk-line">
-        <LimitLine costUsd={cost} limitPct={LIMIT} fillPct={row?.pct ?? 0} amountUsd={ORDER} isBlocked={blocked} />
+        <LimitLine costUsd={cost} limitPct={LIMIT} fillPct={pct} amountUsd={size} isBlocked={blocked} />
         {row && (
-          <div key={`${row.symbol}-${blocked}`} className={`tk-stamp${blocked ? "" : " is-clear"}`}>
+          <div key={`${row.symbol}-${blocked}-${size}`} className={`tk-stamp${blocked ? "" : " is-clear"}`}>
             {blocked ? "BLOCKED" : "CLEARS"}
           </div>
         )}
       </div>
     </article>
+    {overlay}
+    </div>
+  );
+});
+
+// The tape: every stock's live cost on $25,000, moving across a strip of paper (device 3).
+export function TickerTape({ rows }: { rows: Row[] }) {
+  const items = rows.length
+    ? rows.map((r) => `${r.name} ${r.pct.toFixed(2)}% · ${usdOrUnder((r.pct / 100) * ORDER)} extra on ${usd(ORDER)}`)
+    : ["reading every stock right now"];
+  const line = items.join("   ▪   ") + "   ▪   ";
+  return (
+    <div className="tape-strip" aria-label="live costs" data-scrolls>
+      <div className="tape-run">
+        <span>{line}</span>
+        <span aria-hidden>{line}</span>
+      </div>
+    </div>
   );
 }
 
-export function SceneHero({ worst, best }: { worst: Row | null; best: Row | null }) {
+// The hero's loop: the full order prints and is stamped BLOCKED, then it is cut to the size that
+// fits and the smaller ticket is revealed, stamped CLEARS. Then it prints again (device 1).
+function useHeroLoop(worst: Row | null, fit: Fit | null) {
+  const [phase, setPhase] = useState<"full" | "fit">("full");
+  const ticket = useRef<PaperHandle>(null);
+  useEffect(() => {
+    if (!worst || !fit) return;
+    let alive = true;
+    let t: ReturnType<typeof setTimeout>;
+    let first = true;
+    const step = (next: "full" | "fit") => {
+      t = setTimeout(() => {
+        if (!alive) return;
+        if (next === "fit") ticket.current?.cut();
+        setPhase(next);
+        step(next === "fit" ? "full" : "fit");
+      }, next === "fit" ? (first ? 9000 : 4200) : 3400);
+      first = false;
+    };
+    step("fit");
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [worst?.symbol, fit?.usd]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { phase, ticket };
+}
+
+export function SceneHero({ worst, fit, rows }: { worst: Row | null; fit: Fit | null; rows: Row[] }) {
+  const { phase, ticket } = useHeroLoop(worst, fit);
   return (
     <Scene id="top" index={1} className="s-hero">
+      <TickerTape rows={rows} />
       <div className="hero-grid">
         <div>
-          <div className="tape rv">
-            <span className="dot" />
-            {worst && best
-              ? `Right now: ${usd(ORDER)} of ${worst.name} costs ${usd((worst.pct / 100) * ORDER)} extra. ${best.name}: ${usdOrUnder((best.pct / 100) * ORDER)}.`
-              : "Reading every stock right now"}
-          </div>
           <h1 className="mega rv wipe">
             Don&apos;t be
             <br />
-            the <span className="red">mark.</span>
+            the <span className="red ink">mark.</span>
           </h1>
           <p className="lede rv" style={{ ["--d" as string]: "160ms" }}>
-            See what a tokenized stock really costs before you buy it on Solana. Over your limit, THE MARK
-            stops the trade.
+            THE MARK shows what a tokenized stock really costs you before you buy it on Solana, and stops the
+            trade if that cost is more than you allow.
           </p>
           <div className="ctas rv" style={{ ["--d" as string]: "260ms" }}>
             <a className="btn-red" href="/check">
@@ -77,7 +130,7 @@ export function SceneHero({ worst, best }: { worst: Row | null; best: Row | null
           </div>
         </div>
         <div className="hero-ticket rv" style={{ ["--d" as string]: "200ms" }}>
-          <PaperTicket row={worst} />
+          <PaperTicket ref={ticket} row={worst} fit={phase === "fit" ? fit : null} />
         </div>
       </div>
       <a className="scroll-cue" href="#cost">
@@ -148,7 +201,7 @@ export function SceneMoves() {
         ))}
       </div>
       <a className="btn-red rv" style={{ ["--d" as string]: "480ms" }} href="/check">
-        Check an order <span aria-hidden>→</span>
+        Launch app <span aria-hidden>→</span>
       </a>
     </Scene>
   );
@@ -173,8 +226,15 @@ export function SceneField({ rows, gaps, readAt }: { rows: Row[]; gaps: Gap[]; r
             Compare all sizes <span aria-hidden>→</span>
           </a>
         </div>
-        <div className="bars rv" style={{ ["--d" as string]: "120ms" }}>
+        <div className="bars rv" style={{ ["--d" as string]: "120ms", ["--line" as string]: `${Math.min(100, (LIMIT / max) * 100)}%` }}>
           {rows.length === 0 && <p className="body">Taking the first reading: about 25 seconds.</p>}
+          {rows.length > 0 && (
+            <div className="bar-head" aria-hidden>
+              <span />
+              <span className="bar-track-legend"><em>your line {LIMIT}%</em></span>
+              <span />
+            </div>
+          )}
           {rows.map((r, i) => (
             <div key={r.symbol} className="bar-row" style={{ ["--d" as string]: `${200 + i * 70}ms` }}>
               <span className="bar-name">{r.name}</span>

@@ -29,10 +29,11 @@ type Scan = {
   readAt: number;
   partial: boolean;
   unread: number;
+  pricesRead: boolean;
   trades: Trade[];
   totals: { trades: number; priced: number; movedUsd: number; overpaidUsd: number; overpaidPct: number | null };
   holdings: Holding[];
-  holdingsTotals: { valueUsd: number; sellUsd: number; exitCostUsd: number };
+  holdingsTotals: { valueUsd: number; sellUsd: number; exitCostUsd: number } | null;
 };
 
 // a figure that rounds to zero is zero: no "-$0.00"
@@ -103,13 +104,24 @@ export default function WalletBlock({ address }: { address: string }) {
       {t.priced === 0 ? (
         <>
           <div className="wb-k">this wallet</div>
-          <p className="wb-lede">No tokenized-stock trades found for this wallet among the eight stocks THE MARK tracks.</p>
+          <p className="wb-lede">
+            {scan.trades.length > 0 && !scan.pricesRead
+              ? `${scan.trades.length} tokenized-stock trade${scan.trades.length === 1 ? "" : "s"} found, but the prices could not be read just now. Scan again in a minute.`
+              : scan.unread > 0 && scan.trades.length === 0
+                ? `${scan.unread} transaction${scan.unread === 1 ? "" : "s"} could not be read just now. Scan again in a minute.`
+                : "No tokenized-stock trades found for this wallet among the eight stocks THE MARK tracks."}
+          </p>
         </>
       ) : (
         <>
-          <div className="wb-k">{over ? "what this wallet paid over" : "this wallet came in under"}</div>
-          <div className="wb-num" style={{ color: over ? "var(--signal)" : "var(--success)" }}>
-            <Odometer value={Math.abs(t.overpaidUsd)} prefix="$" />
+          <div className="wb-k">at today&apos;s prices, this wallet&apos;s trades are {over ? "over" : "under"} by</div>
+          <div className="wb-top">
+            <div className="wb-num" style={{ color: over ? "var(--signal)" : "var(--success)" }}>
+              <Odometer value={Math.abs(t.overpaidUsd)} prefix="$" />
+            </div>
+            {t.overpaidPct !== null && (
+              <div className={`wb-stamp${over && t.overpaidPct > 1 ? "" : " is-clear"}`}>{over && t.overpaidPct > 1 ? "THE MARK" : "NOT THE MARK"}</div>
+            )}
           </div>
           <p className="wb-lede">
             {over ? "more" : "less"} than its {t.priced} tokenized-stock trade{t.priced === 1 ? "" : "s"} ({usd(t.movedUsd, 0)} moved) were worth at{" "}
@@ -117,6 +129,7 @@ export default function WalletBlock({ address }: { address: string }) {
             {t.overpaidPct !== null ? `, ${Math.abs(t.overpaidPct).toFixed(2)}% of what moved` : ""}.
           </p>
           <p className="wb-note">
+            {t.overpaidPct !== null ? (over && t.overpaidPct > 1 ? `Over the 1% line: the pools, and the market since, took more than 1% of what moved.` : `Under the 1% line.`) : ""}{" "}
             Prices are read now, not at the moment of each trade, so what the market has done since is in this figure too.
             {scan.partial ? " Only the 30 most recent trades are counted." : ""}
             {scan.unread > 0 ? ` ${scan.unread} trade${scan.unread === 1 ? "" : "s"} could not be read this time; scan again in a minute.` : ""}
@@ -132,7 +145,7 @@ export default function WalletBlock({ address }: { address: string }) {
             <span>shares</span>
             <span>worth</span>
             <span>sells for</span>
-            <span>toll</span>
+            <span>toll to sell</span>
           </div>
           {scan.holdings.map((x) => (
             <div key={x.symbol} className="wb-row">
@@ -141,17 +154,19 @@ export default function WalletBlock({ address }: { address: string }) {
               <span>{x.valueUsd === null ? "—" : usd(x.valueUsd)}</span>
               <span>{x.sellUsd === null ? "no route" : usd(x.sellUsd)}</span>
               <span style={{ color: x.exitCostUsd !== null && x.exitCostUsd > 0.005 ? "var(--signal)" : "var(--text-primary)" }}>
-                {x.exitCostUsd === null ? "—" : usd(x.exitCostUsd)}
+                {x.exitCostUsd === null ? "—" : x.exitCostUsd <= 0.005 ? "none" : usd(x.exitCostUsd)}
               </span>
             </div>
           ))}
-          <div className="wb-row wb-total">
-            <span>all of it</span>
-            <span />
-            <span>{usd(h.valueUsd)}</span>
-            <span>{usd(h.sellUsd)}</span>
-            <span style={{ color: h.exitCostUsd > 0.005 ? "var(--signal)" : "var(--text-primary)" }}>{usd(h.exitCostUsd)}</span>
-          </div>
+          {h && (
+            <div className="wb-row wb-total">
+              <span>all of it</span>
+              <span />
+              <span>{usd(h.valueUsd)}</span>
+              <span>{usd(h.sellUsd)}</span>
+              <span style={{ color: h.exitCostUsd > 0.005 ? "var(--signal)" : "var(--text-primary)" }}>{h.exitCostUsd <= 0.005 ? "none" : usd(h.exitCostUsd)}</span>
+            </div>
+          )}
           <p className="wb-note">The toll is what the pools keep if the wallet sold everything right now, against the tokens&apos; own prices: the price moving against the order, plus each token&apos;s fee.</p>
         </div>
       )}
@@ -190,7 +205,10 @@ export default function WalletBlock({ address }: { address: string }) {
 const WB_CSS = `
 .wb{animation:proof-arrive 320ms cubic-bezier(.23,1,.32,1)}
 .wb-k{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px}
-.wb-num{font-family:"JetBrains Mono",monospace;font-weight:600;font-size:clamp(52px,10vw,120px);line-height:1;min-height:1em;letter-spacing:-.02em;margin:6px 0 12px}
+.wb-top{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin:6px 0 12px}
+.wb-num{font-family:"JetBrains Mono",monospace;font-weight:600;font-size:clamp(52px,10vw,120px);line-height:1;min-height:1em;letter-spacing:-.02em}
+.wb-stamp{font-family:Archivo,sans-serif;font-weight:800;font-size:clamp(18px,2.4vw,30px);letter-spacing:.12em;color:#C4261D;border:4px double #C4261D;border-radius:6px;padding:6px 14px 4px;transform:rotate(-7deg);opacity:.9;animation:tk-slam .46s cubic-bezier(.2,1.3,.35,1) both}
+.wb-stamp.is-clear{color:#0B7A3B;border-color:#0B7A3B}
 .wb-lede{font-family:Archivo,sans-serif;font-size:18px;line-height:1.45;color:var(--text-primary);margin:0;max-width:52ch}
 .wb-note{font-family:"JetBrains Mono",monospace;font-size:12px;line-height:1.6;color:var(--text-dim);margin:14px 0 0;max-width:70ch}
 .wb-hold,.wb-trades{margin-top:30px}

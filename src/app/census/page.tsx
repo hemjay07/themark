@@ -1,279 +1,131 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { TOKEN_LIST } from "@/lib/tokens";
+import { TOKEN_LIST, displayName } from "@/lib/tokens";
 import { CENSUS_SIZES } from "@/lib/censusSizes";
-import CensusRow, { type CellState, type RowState } from "@/components/CensusRow";
+import { useCensus } from "@/lib/useCensus";
 
-const ROW_SLOT = 160;
-
-// "Intel xStock" -> "Intel", "T-OpenAI" -> "OpenAI": the headline names companies, not tickers.
-const plainName = (symbol: string) => {
-  const t = TOKEN_LIST.find((x) => x.symbol === symbol);
-  return (t?.name ?? symbol).replace(/ xStock$/, "").replace(/^T-/, "").replace(/^SP500$/, "the S&P 500");
-};
-
+// Compare: the field against your line (PRD-V5). Every stock at three sizes, drawn against the limit
+// the reader sets. Red over the line, green under. One shared reading, refreshed every two minutes,
+// its age on the page. Nothing here is computed on the client but the comparison.
 export default function CensusPage() {
-  const [rows, setRows] = useState<Record<string, RowState>>({});
-  const [lastRead, setLastRead] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
-
-  // One shared reading, refreshed on the server every two minutes (see src/app/api/census/route.ts).
-  // Poll fast until the first complete reading exists, then slowly to pick up each refresh.
-  const [readAtMs, setReadAtMs] = useState<number | null>(null);
+  const census = useCensus();
+  const [limit, setLimit] = useState(1);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
-      let complete = false;
-      try {
-        const res = await fetch("/api/census", { cache: "no-store" });
-        const data = await res.json();
-        if (cancelled) return;
-        const next: Record<string, RowState> = {};
-        for (const [mint, sizes] of Object.entries(data.cells as Record<string, Record<string, any>>)) {
-          next[mint] = {};
-          for (const [key, c] of Object.entries(sizes)) {
-            next[mint]![key] = c.ok
-              ? { status: "ok", quote: { fillCostPct: c.pct } }
-              : { status: "error", message: c.reason };
-          }
-        }
-        setRows(next);
-        complete = Boolean(data.complete);
-        setDone(complete);
-        setReadAtMs(data.readAt);
-        if (data.readAt) setLastRead(new Date(data.readAt).toISOString());
-      } catch {
-        // keep whatever reading is on screen; its age keeps counting, so it never passes as fresh
-      }
-      if (!cancelled) timer = setTimeout(poll, complete ? 30000 : 2500);
-    };
-    poll();
-    const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-      clearInterval(tick);
-    };
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(t);
   }, []);
 
-  // The headline claim is computed from the rows that have landed, never remembered. (charter ban 1)
-  const spread = useMemo(() => {
-    const largest = CENSUS_SIZES[CENSUS_SIZES.length - 1];
-    const landed: Array<{ symbol: string; pct: number }> = [];
-    for (const token of TOKEN_LIST) {
-      const cell = rows[token.mint]?.[largest.key];
-      if (cell?.status === "ok" && Number.isFinite(cell.quote.fillCostPct)) {
-        landed.push({ symbol: token.symbol, pct: cell.quote.fillCostPct });
-      }
-    }
-    if (landed.length < 2) return null;
-    landed.sort((a, b) => a.pct - b.pct);
-    const best = landed[0];
-    const worst = landed[landed.length - 1];
-    if (best.pct <= 0) return null;
-    return {
-      multiple: `${Math.round(worst.pct / best.pct)}x`,
-      size: largest.label ?? largest.key,
-      bestSymbol: best.symbol,
-      bestPct: best.pct.toFixed(2),
-      worstSymbol: worst.symbol,
-      worstPct: worst.pct.toFixed(2),
-    };
-  }, [rows]);
+  const rows = useMemo(() => {
+    const list = TOKEN_LIST.map((t) => ({
+      symbol: t.symbol,
+      name: displayName(t.symbol),
+      cells: CENSUS_SIZES.map((s) => {
+        const c = census?.cells?.[t.mint]?.[s.key];
+        return { size: s, pct: c && c.ok ? c.pct : null, reason: c && !c.ok ? c.reason : null };
+      }),
+    }));
+    // worst first, by the largest order
+    return list.sort((a, b) => (b.cells[2].pct ?? -1) - (a.cells[2].pct ?? -1));
+  }, [census]);
 
-  // fillCostPct (price impact plus transfer fee) is the fill's own cost, never negative.
-  // allInCostPct nets off the basis and can go negative, which is wrong for a cost bar.
-  const scaleMax = useMemo(() => {
-    const pcts: number[] = [];
-    for (const row of Object.values(rows)) {
-      for (const size of CENSUS_SIZES) {
-        const cell = row?.[size.key];
-        if (cell?.status === "ok") pcts.push(cell.quote.fillCostPct);
-      }
-    }
-    if (!pcts.length) return 1;
-    return Math.max(...pcts) * 1.08;
-  }, [rows]);
-
-  // The rank each token would hold once its worst leg is known — printed as a number on a row
-  // that never moves, so the field can be read as ranked without the list itself reordering
-  // under the reader as quotes land (a moving row is a layout shift; a printed number is not).
-  const rankByMint = useMemo(() => {
-    const worst = (mint: string) => {
-      const row = rows[mint];
-      if (!row) return null;
-      let max: number | null = null;
-      for (const size of CENSUS_SIZES) {
-        const cell = row[size.key];
-        if (cell?.status === "ok") max = Math.max(max ?? -Infinity, cell.quote.fillCostPct);
-      }
-      return max;
-    };
-    const scored = TOKEN_LIST.map((t) => ({ mint: t.mint, score: worst(t.mint) }))
-      .filter((s): s is { mint: string; score: number } => s.score !== null)
-      .sort((a, b) => b.score - a.score);
-    const map = new Map<string, number>();
-    scored.forEach((s, i) => map.set(s.mint, i + 1));
-    return map;
-  }, [rows]);
-
-  // worst first, then the tokens still reading, in list order
-  const slotByMint = useMemo(() => {
-    const ranked = TOKEN_LIST.filter((t) => rankByMint.has(t.mint)).sort(
-      (a, b) => (rankByMint.get(a.mint) ?? 0) - (rankByMint.get(b.mint) ?? 0)
-    );
-    const rest = TOKEN_LIST.filter((t) => !rankByMint.has(t.mint));
-    return new Map([...ranked, ...rest].map((t, i) => [t.mint, i]));
-  }, [rankByMint]);
-
-
-
+  const all = rows.flatMap((r) => r.cells.map((c) => c.pct)).filter((p): p is number => p !== null);
+  const scaleMax = Math.max(limit * 1.25, ...all, 0.5);
+  const line = Math.min(1, limit / scaleMax); // a fraction of the bar column
+  const clears = all.filter((p) => p <= limit).length;
+  const read = all.length;
+  const best = rows.length && rows[rows.length - 1].cells.every((c) => c.pct !== null && c.pct <= limit) ? rows[rows.length - 1] : null;
+  const worst = rows[0] ?? null;
+  const worstFits = worst ? worst.cells.filter((c) => c.pct !== null && c.pct <= limit).map((c) => c.size.label) : [];
+  const ageS = census?.readAt && now ? Math.max(0, Math.round((now - census.readAt) / 1000)) : null;
 
   return (
-    <>
-      <main className="census-page">
-      {/* Rendered via dangerouslySetInnerHTML, not as a plain text child: <style> is a raw-text
-          HTML element, so the browser never decodes entities inside it. React's default text-node
-          serializer HTML-escapes quote characters for SSR, which produced a real server/client
-          text mismatch here (the font-family strings contain literal double quotes) and was the
-          source of the React #425 hydration error. dangerouslySetInnerHTML skips that escaping. */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        .census-page{max-width:960px;margin:0 auto;padding:48px 24px 88px}
-        .census-kicker{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.16em;
-          text-transform:uppercase;color:var(--text-dim);margin-bottom:18px}
-        .census-headline{min-height:2.3em;font-family:Archivo,sans-serif;font-weight:400;font-size:32px;line-height:1.12;
-          letter-spacing:-0.01em;color:var(--text-primary);margin:0 0 16px;max-width:22ch}
-        .census-sub{font-size:14px;line-height:1.6;color:var(--text-muted);max-width:56ch;margin:0 0 24px}
-        .census-status{display:flex;align-items:center;gap:8px;font-family:"JetBrains Mono",monospace;
-          font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);
-          margin-bottom:8px;min-height:2.6em;line-height:1.3}
-        .census-dot{width:6px;height:6px;border-radius:50%;background:var(--success);flex:0 0 6px}
-        .census-dot[data-done="true"]{opacity:1}
-        /* Reserves its own space at all times (visibility:hidden keeps the box, drops it from the
-           a11y tree) rather than opacity, which would still be read by a screen reader while unseen. */
-        .census-all{visibility:hidden}
-        .census-all[data-visible="true"]{visibility:visible}
-        @media (prefers-reduced-motion: no-preference){
-          .census-dot{animation:census-pulse 1400ms ease-in-out infinite}
-          .census-dot[data-done="true"]{animation:none}
-          .fb-in{animation:fb-in 180ms ease-out both}
-        }
-        @keyframes census-pulse{0%,100%{opacity:1}50%{opacity:.35}}
-        @keyframes fb-in{from{opacity:0}to{opacity:1}}
-        .census-legend{display:flex;gap:20px;flex-wrap:wrap;padding:16px 0 20px;margin-bottom:8px;
-          border-bottom:1px solid var(--border);font-family:"JetBrains Mono",monospace;font-size:11px;
-          color:var(--text-dim);letter-spacing:.06em}
-        .census-legend b{color:var(--text-primary);font-weight:400}
-        .census-list{display:flex;flex-direction:column}
-        .cr{border-bottom:1px solid var(--border);padding:16px 0}
-        .cr:first-child{border-top:1px solid var(--border)}
-        .cr-head{display:flex;align-items:baseline;gap:10px;margin-bottom:10px;min-width:0}
-        .cr-rank{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--text-dim);flex:0 0 20px}
-        .cr-symbol{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--text-primary);flex:0 0 auto}
-        .cr-name{font-size:12px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;
-          white-space:nowrap;min-width:0}
-        .cr-bars{display:flex;flex-direction:column;gap:2px}
-        .fb-row{display:flex;align-items:center;gap:10px;padding:5px 0}
-        .fb-label{flex:0 0 58px;font-family:"JetBrains Mono",monospace;font-size:10.5px;
-          color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em}
-        .fb-track{display:block;flex:1;height:8px;min-width:0;background:var(--border);border-radius:2px;overflow:hidden}
-        /* Grows on the transform axis, not width: the layout engine never scores a compositor-only
-           transform as a shift, so the device (the bar array) can carry a real motion moment
-           tied to its meaning without costing CLS. Final size is set once, at insertion, by width. */
-        .fb-fill{display:block;height:100%;background:var(--signal);border-radius:2px;transform-origin:left}
-        @media (prefers-reduced-motion: no-preference){
-          .fb-fill{animation:fb-grow 320ms cubic-bezier(0.23,1,0.32,1) both}
-        }
-        @keyframes fb-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-        .fb-value{flex:0 0 62px;text-align:right;font-family:"JetBrains Mono",monospace;font-size:12.5px;
-          color:var(--text-primary);font-variant-numeric:tabular-nums}
-        .fb-dim{color:var(--text-dim)}
-        .census-foot{margin-top:28px;padding-top:20px;border-top:1px solid var(--border);
-          font-family:"JetBrains Mono",monospace;font-size:11px;line-height:1.7;color:var(--text-dim)}
-        @media (max-width:600px){
-          .census-page{padding:32px 16px 72px}
-          .census-headline{font-size:22px;max-width:none;min-height:4.6em}
-          .cr-name{display:none}
-          .fb-label{flex:0 0 48px;font-size:10px}
-          .fb-value{flex:0 0 54px;font-size:12px}
-        }
-      ` }} />
+    <main className="fd">
+      <style dangerouslySetInnerHTML={{ __html: FD_CSS }} />
+      <div className="fd-inner">
+        <div className="kicker">Compare stocks · the field, against your line</div>
+        <h1 className="fd-sum">
+            {read === 0
+              ? "Taking the first reading now: about 25 seconds, then every 2 minutes."
+              : `At ${limit.toFixed(2)}%, ${clears} of ${read} orders clear your line (green); the rest go over it (red). ${best ? `${best.name} clears at every size.` : ""} ${
+                  worst ? (worstFits.length === 0 ? `${worst.name} clears at none.` : worstFits.length === 3 ? `${worst.name} clears at every size.` : `${worst.name} clears only at ${worstFits.join(" and ")}.`) : ""
+                }`}
+        </h1>
+        <label className="fd-limit">
+          <span>Your limit</span>
+          <input data-limit type="range" min="0.1" max="3" step="0.05" value={limit} onChange={(e) => setLimit(parseFloat(e.target.value))} aria-label="Your limit" />
+          <b>{limit.toFixed(2)}%</b>
+        </label>
 
-      <div className="census-kicker">Compare stocks</div>
-      <h1 className="census-headline">
-        {spread
-          ? `On the same ${spread.size} order, ${plainName(spread.worstSymbol)} costs ${spread.multiple} what ${plainName(spread.bestSymbol)} does.`
-          : "The same order costs very different amounts depending on the stock."}
-      </h1>
-      <p className="census-sub">
-        Every tokenized stock, priced live at three order sizes, worst first. The gap between token and
-        share that most of this field charts measured a median 0.20% across 20 pairs on 2026-09-22.
-      </p>
-
-
-
-      <div className="census-status">
-        <span className="census-dot" data-done={done} />
-        <span suppressHydrationWarning>
-          {readAtMs && now
-            ? `read live ${Math.max(0, Math.round((now - readAtMs) / 1000))}s ago · every 2 min`
-            : "taking the first reading now: about 25 seconds, then every 2 minutes"}
-        </span>
-      </div>
-
-      <div className="census-legend">
-        <span>order sizes</span>
-        {CENSUS_SIZES.map((s) => (
-          <span key={s.key}>
-            <b>{s.label}</b>
-          </span>
-        ))}
-      </div>
-
-      {/* the thing that could only exist for this product: every token in the list, at three
-          order sizes, on one shared cost scale, read live. row position is fixed; only the
-          numbers and the printed rank move. */}
-      {/* Rows sit in fixed 160px slots and move to their rank with a transform. Re-sorting them in the
-          DOM as reads landed cost 0.31 CLS; a transform moves the paint, not the layout, so the page
-          never shifts while the worst pool slides to the top where the finding belongs. */}
-      <div
-        className="census-list"
-        data-device="fill-cost-census"
-        style={{ position: "relative", height: `${TOKEN_LIST.length * ROW_SLOT}px` }}
-      >
-        {TOKEN_LIST.map((token) => (
-          <div
-            key={token.mint}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: `${ROW_SLOT}px`,
-              overflow: "hidden",
-              transform: `translateY(${(slotByMint.get(token.mint) ?? 0) * ROW_SLOT}px)`,
-              transition: "transform 420ms cubic-bezier(0.23, 1, 0.32, 1)",
-            }}
-          >
-            <CensusRow
-              rank={rankByMint.get(token.mint) ?? null}
-              token={token}
-              row={rows[token.mint]}
-              sizes={CENSUS_SIZES}
-              scaleMax={scaleMax}
-            />
+        <div className="fd-grid" style={{ ["--lf" as string]: String(line) }}>
+          {read === 0 && <p className="fd-wait">Every stock at three sizes, drawn against your line, once the reading is in.</p>}
+          {read > 0 && (
+          <div className="fd-head" aria-hidden>
+            <span />
+            <span className="fd-scale">
+              <em>your limit {limit.toFixed(2)}%</em>
+            </span>
           </div>
-        ))}
-      </div>
+          )}
+          {read > 0 && rows.map((r) => (
+            <div key={r.symbol} className="fd-row">
+              <span className="fd-name">{r.name}</span>
+              <span className="fd-track">
+                {r.cells.map((c) => (
+                  <span key={c.size.key} className="fd-cell">
+                    <b>{c.size.label}</b>
+                    <span className="fd-col">
+                      <span data-cell className={`fd-bar${c.pct === null ? " gap" : c.pct > limit ? " over" : ""}${c.pct !== null && c.pct / scaleMax > 0.72 ? " in" : ""}`} style={{ width: c.pct === null ? "0%" : `${Math.max(1.5, (c.pct / scaleMax) * 100)}%` }}>
+                        <i>{c.pct === null ? (c.reason ? (/no route/i.test(c.reason) ? "no exchange can fill it" : c.reason) : "…") : `${c.pct.toFixed(2)}%`}</i>
+                      </span>
+                    </span>
+                  </span>
+                ))}
+                <span className="fd-line" />
+              </span>
+            </div>
+          ))}
+        </div>
 
-      <div className="census-foot">
-        Every figure is a live price quote for buying with USDC, taken in one reading that refreshes every
-        two minutes. A row that says &quot;no read&quot; could not be priced, and nothing is filled in for it.
+        <p className="fd-age">
+          {ageS !== null ? `read live ${ageS}s ago · every 2 min` : "one shared reading, refreshed every 2 minutes"} · every figure is a live quote for buying with USDC, plus the token&apos;s own fee
+        </p>
       </div>
     </main>
-    </>
   );
 }
+
+const FD_CSS = `
+.fd{padding:40px 20px 80px}
+.fd-inner{max-width:1120px;margin:0 auto}
+.kicker{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--text-dim);margin-bottom:18px}
+.fd-h{font-family:Archivo,sans-serif;font-weight:700;font-size:clamp(34px,4.6vw,64px);line-height:1;letter-spacing:-.025em;color:var(--text-primary);margin:0 0 24px}
+.dim{color:var(--text-dim)}
+.fd-limit{display:grid;grid-template-columns:auto minmax(160px,320px) auto;align-items:center;gap:14px;font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);margin:18px 0 34px}
+.fd-limit b{font-size:16px;color:var(--signal);letter-spacing:0}
+.fd-limit input{width:100%;height:4px;appearance:none;border-radius:2px;background:var(--border);accent-color:var(--signal)}
+.fd-limit input::-webkit-slider-thumb{appearance:none;width:18px;height:18px;border-radius:50%;background:var(--signal);border:3px solid var(--bg);box-shadow:0 0 0 1.5px var(--signal);cursor:grab}
+.fd-sum{font-family:Archivo,sans-serif;font-weight:600;font-size:clamp(24px,3.2vw,44px);line-height:1.12;letter-spacing:-.02em;color:var(--text-primary);margin:0;max-width:24ch;min-height:2.3em}
+@media (max-width:640px){.fd-sum{min-height:4.5em}}
+.fd-grid{display:grid;gap:10px;min-height:720px;align-content:start}
+.fd-wait{font-family:Archivo,sans-serif;font-size:15px;color:var(--text-dim);margin:0}
+.fd-head,.fd-row{display:grid;grid-template-columns:110px 1fr;gap:14px;align-items:center}
+@media (max-width:640px){.fd-head,.fd-row{grid-template-columns:1fr;gap:6px}.fd-head span:first-child{display:none}}
+.fd-scale{display:block;position:relative;height:16px}
+.fd-scale em{position:absolute;left:calc(64px + (100% - 64px) * var(--lf, 1));transform:translateX(-50%);font-style:normal;font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--signal);white-space:nowrap}
+.fd-name{font-family:Archivo,sans-serif;font-size:15px;font-weight:600;color:var(--text-primary)}
+.fd-track{display:grid;gap:5px;position:relative;padding:8px 0;border-top:1px solid var(--border)}
+.fd-cell{display:grid;grid-template-columns:56px 1fr;gap:8px;align-items:center}
+.fd-cell b{font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:400;color:var(--text-dim);white-space:nowrap}
+.fd-col{display:block;position:relative;height:16px}
+.fd-bar{position:absolute;left:0;top:0;display:block;height:16px;border-radius:2px;background:#3DBE74;min-width:2px;transition:width .5s cubic-bezier(.2,.8,.2,1),background .2s ease-out}
+.fd-bar.over{background:var(--signal)}
+.fd-bar.gap{background:transparent}
+.fd-bar i{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);font-style:normal;font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--text-primary);white-space:nowrap}
+.fd-bar.gap i{color:var(--text-dim)}
+.fd-bar.in i{left:auto;right:8px;color:#fff}
+.fd-line{position:absolute;top:0;bottom:0;left:calc(64px + (100% - 64px) * var(--lf, 1));border-left:2px dashed rgba(196,38,29,.9);pointer-events:none}
+.fd-age{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;line-height:1.7;color:var(--text-dim);margin:26px 0 0;max-width:80ch}
+`;

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
 import { rpc } from "@/lib/solanaRpc";
 import { jupGet } from "@/lib/jupServer";
-import { TOKEN_LIST, USDC_MINT, displayName, referencePriceFor } from "@/lib/tokens";
+import { TOKEN_LIST, USDC_MINT, displayName, referencePriceFor, multiplierFromFeed } from "@/lib/tokens";
 import type { Price } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -22,15 +22,6 @@ const CONCURRENCY = 4;
 const LISTED = new Map(TOKEN_LIST.map((t) => [t.mint, t]));
 
 type Leg = { signature: string; side: "buy" | "sell"; mint: string; usd: number; units: number; blockTime: number | null };
-
-// The balance multiplier from the price feed, as getQuote resolves it: the new one once it is in force.
-function multiplierOf(price?: Price): number {
-  const cfg = price?.scaledUiConfig;
-  if (!cfg) return 1;
-  const at = cfg.newMultiplierEffectiveAt ? Date.parse(cfg.newMultiplierEffectiveAt) / 1000 : null;
-  if (typeof cfg.newMultiplier === "number" && at !== null && Date.now() / 1000 >= at) return cfg.newMultiplier;
-  return typeof cfg.multiplier === "number" ? cfg.multiplier : 1;
-}
 
 function marketPriceOf(price?: Price): number | null {
   const p = price?.usdPrice;
@@ -64,41 +55,59 @@ function classify(signature: string, tx: any, owner: string): Leg | null {
   if (!tx || tx.meta?.err) return null;
   const moves = rawMoves(tx, owner);
   const usdc = moves.get(USDC_MINT) ?? 0;
-  const stocks = [...moves].filter(([mint]) => LISTED.has(mint)).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
-  if (!stocks.length || usdc === 0) return null;
+  const stocks = [...moves].filter(([mint, units]) => LISTED.has(mint) && Math.abs(units) > 0);
+  // exactly one listed stock against USDC is a purchase or a sale; a basket or a stock-to-stock swap
+  // cannot be priced as one trade, so it is left out rather than misread
+  if (stocks.length !== 1 || Math.abs(usdc) < 0.01) return null;
   const [mint, units] = stocks[0];
   if (usdc < 0 && units > 0) return { signature, side: "buy", mint, usd: -usdc, units, blockTime: tx.blockTime ?? null };
   if (usdc > 0 && units < 0) return { signature, side: "sell", mint, usd: usdc, units: -units, blockTime: tx.blockTime ?? null };
   return null;
 }
 
-async function tradeSignatures(owner: PublicKey): Promise<{ list: Array<[string, number | null]>; partial: boolean }> {
-  const seen = new Map<string, number | null>();
-  for (const t of TOKEN_LIST) {
-    const [ata] = PublicKey.findProgramAddressSync(
-      [owner.toBuffer(), TOKEN_2022.toBuffer(), new PublicKey(t.mint).toBuffer()],
-      ATA_PROGRAM
-    );
-    const sigs = await rpc<Array<{ signature: string; err: unknown; blockTime?: number }>>("getSignaturesForAddress", [
-      ata.toBase58(),
-      { limit: 25 },
-    ]);
-    for (const s of sigs) if (!s.err) seen.set(s.signature, s.blockTime ?? null);
-  }
-  const list = [...seen].sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
-  return { list: list.slice(0, MAX_TRADES), partial: list.length > MAX_TRADES };
-}
-
-async function holdingsOf(address: string) {
+// Every token account the wallet holds for a listed stock (the associated one and any other), with
+// what is in it. One call. The accounts are where the trades happened, so their histories are the
+// trades, and their balances are the holdings.
+type Account = { address: string; mint: string; raw: bigint; decimals: number };
+async function accountsOf(owner: PublicKey): Promise<Account[]> {
   const res = await rpc<{ value: any[] }>("getTokenAccountsByOwner", [
-    address,
+    owner.toBase58(),
     { programId: TOKEN_2022.toBase58() },
     { encoding: "jsonParsed" },
   ]);
-  return (res?.value ?? [])
-    .map((a) => a?.account?.data?.parsed?.info)
-    .filter((i) => i && LISTED.has(i.mint) && Number(i.tokenAmount?.amount) > 0)
-    .map((i) => ({ mint: i.mint as string, raw: String(i.tokenAmount.amount), units: Number(i.tokenAmount.amount) / 10 ** i.tokenAmount.decimals }));
+  const found = (res?.value ?? [])
+    .map((a) => ({ address: a?.pubkey as string, info: a?.account?.data?.parsed?.info }))
+    .filter((a) => a.address && a.info && LISTED.has(a.info.mint))
+    .map((a) => ({ address: a.address, mint: a.info.mint as string, raw: BigInt(a.info.tokenAmount.amount), decimals: a.info.tokenAmount.decimals as number }));
+  // a closed associated account still has a history: derive it too, once, if it is not in the list
+  for (const t of TOKEN_LIST) {
+    const [ata] = PublicKey.findProgramAddressSync([owner.toBuffer(), TOKEN_2022.toBuffer(), new PublicKey(t.mint).toBuffer()], ATA_PROGRAM);
+    if (!found.some((f) => f.address === ata.toBase58())) found.push({ address: ata.toBase58(), mint: t.mint, raw: 0n, decimals: t.decimals });
+  }
+  return found;
+}
+
+async function tradeSignatures(accounts: Account[]): Promise<{ list: Array<[string, number | null]>; partial: boolean }> {
+  const seen = new Map<string, number | null>();
+  let partial = false;
+  for (const a of accounts) {
+    const sigs = await rpc<Array<{ signature: string; err: unknown; blockTime?: number }>>("getSignaturesForAddress", [a.address, { limit: 25 }]);
+    if (sigs.length >= 25) partial = true;
+    for (const s of sigs) if (!s.err) seen.set(s.signature, s.blockTime ?? null);
+  }
+  const list = [...seen].sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
+  return { list: list.slice(0, MAX_TRADES), partial: partial || list.length > MAX_TRADES };
+}
+
+// holdings summed by mint across accounts, so one stock is one row and one exit quote
+function holdingsFrom(accounts: Account[]) {
+  const byMint = new Map<string, { raw: bigint; decimals: number }>();
+  for (const a of accounts) {
+    if (a.raw <= 0n) continue;
+    const cur = byMint.get(a.mint) ?? { raw: 0n, decimals: a.decimals };
+    byMint.set(a.mint, { raw: cur.raw + a.raw, decimals: a.decimals });
+  }
+  return [...byMint].map(([mint, v]) => ({ mint, raw: v.raw.toString(), units: Number(v.raw) / 10 ** v.decimals }));
 }
 
 export async function GET(request: Request) {
@@ -112,7 +121,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { list, partial } = await tradeSignatures(owner);
+    const accounts = await accountsOf(owner);
+    const { list, partial } = await tradeSignatures(accounts);
     // four reads at a time; on publicnode thirty take about two seconds
     const legs: Leg[] = [];
     let unread = 0;
@@ -120,31 +130,39 @@ export async function GET(request: Request) {
     const worker = async () => {
       for (let sig = queue.shift(); sig; sig = queue.shift()) {
         try {
-          const tx = await rpc("getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]);
+          const tx = await rpc("getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1 }]);
+          if (!tx) {
+            unread += 1;
+            continue;
+          }
           const leg = classify(sig, tx, address);
           if (leg) legs.push(leg);
         } catch {
-          // the endpoint refused this one after retries: counted, never guessed
+          // the endpoint refused this one: counted, never guessed
           unread += 1;
         }
       }
     };
-    const [held] = await Promise.all([holdingsOf(address), ...Array.from({ length: CONCURRENCY }, worker)]);
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    const held = holdingsFrom(accounts);
     legs.sort((a, b) => (b.blockTime ?? 0) - (a.blockTime ?? 0));
 
     // one price read for every mint involved, through the paced queue, ahead of background work
     const mints = [...new Set([...legs.map((l) => l.mint), ...held.map((h) => h.mint)])];
     let prices: Record<string, Price> = {};
+    let pricesRead = true;
     if (mints.length) {
       const { status, body } = await jupGet(`/price/v3?ids=${mints.join(",")}`, "mid");
       if (status === 200) prices = JSON.parse(body);
+      else pricesRead = false;
     }
 
     const trades = legs.map((l) => {
       const p = prices[l.mint];
       const { price: ref, kind } = referencePriceFor(l.mint, p);
-      const shares = l.units * multiplierOf(p);
-      const value = ref === null ? null : shares * ref;
+      const mult = multiplierFromFeed(p);
+      const shares = mult === null ? null : l.units * mult;
+      const value = ref === null || shares === null ? null : shares * ref;
       const vsShareUsd = value === null ? null : l.side === "buy" ? l.usd - value : value - l.usd;
       return {
         signature: l.signature,
@@ -152,7 +170,8 @@ export async function GET(request: Request) {
         symbol: LISTED.get(l.mint)!.symbol,
         name: displayName(LISTED.get(l.mint)!.symbol),
         usd: l.usd,
-        shares,
+        shares: shares ?? l.units,
+        sharesKnown: shares !== null,
         vsShareUsd,
         vsSharePct: vsShareUsd === null ? null : (vsShareUsd / l.usd) * 100,
         referenceKind: kind,
@@ -168,10 +187,11 @@ export async function GET(request: Request) {
       const p = prices[h.mint];
       const { price: ref, kind } = referencePriceFor(h.mint, p);
       const market = marketPriceOf(p);
-      const shares = h.units * multiplierOf(p);
-      const valueUsd = ref === null ? null : shares * ref;
+      const mult = multiplierFromFeed(p);
+      const shares = mult === null ? h.units : h.units * mult;
+      const valueUsd = ref === null || mult === null ? null : shares * ref;
       // the toll for getting out: what the pools pay against the token's own market price now
-      const marketUsd = market === null ? null : shares * market;
+      const marketUsd = market === null || mult === null ? null : shares * market;
       const q = await jupGet(`/swap/v1/quote?inputMint=${h.mint}&outputMint=${USDC_MINT}&amount=${h.raw}&slippageBps=100`, "mid");
       let sellUsd: number | null = null;
       try {
@@ -189,7 +209,8 @@ export async function GET(request: Request) {
         exitCostUsd: marketUsd !== null && sellUsd !== null ? marketUsd - sellUsd : null,
       });
     }
-    const valued = holdings.filter((h) => h.exitCostUsd !== null);
+    // totals only when every holding could be valued; a partial sum under rows showing "—" is a lie
+    const whole = holdings.length > 0 && holdings.every((h) => h.exitCostUsd !== null);
 
     return NextResponse.json(
       {
@@ -197,14 +218,17 @@ export async function GET(request: Request) {
         readAt: Date.now(),
         partial,
         unread,
+        pricesRead,
         trades,
         totals: { trades: trades.length, priced: priced.length, movedUsd: moved, overpaidUsd: overpaid, overpaidPct: moved > 0 ? (overpaid / moved) * 100 : null },
         holdings,
-        holdingsTotals: {
-          valueUsd: valued.reduce((s, h) => s + (h.valueUsd as number), 0),
-          sellUsd: valued.reduce((s, h) => s + (h.sellUsd as number), 0),
-          exitCostUsd: valued.reduce((s, h) => s + (h.exitCostUsd as number), 0),
-        },
+        holdingsTotals: whole
+          ? {
+              valueUsd: holdings.reduce((s, h) => s + (h.valueUsd as number), 0),
+              sellUsd: holdings.reduce((s, h) => s + (h.sellUsd as number), 0),
+              exitCostUsd: holdings.reduce((s, h) => s + (h.exitCostUsd as number), 0),
+            }
+          : null,
       },
       { headers: { "Cache-Control": "no-store" } }
     );

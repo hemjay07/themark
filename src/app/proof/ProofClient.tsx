@@ -7,6 +7,7 @@ import { displayName, TOKEN_LIST } from "@/lib/tokens";
 import type { IssuerControl } from "@/lib/types";
 import Odometer from "@/components/Odometer";
 import WalletBlock from "./WalletBlock";
+import { TICKET_CSS } from "@/components/TradeTicket";
 
 const mono: CSSProperties = {
   fontFamily: '"JetBrains Mono", monospace',
@@ -128,7 +129,7 @@ function ReceiptBlock({ result }: { result: TxReconciliation }) {
           letterSpacing: "-0.02em",
           fontWeight: 600,
           color: colour,
-          margin: "10px 0 12px",
+          margin: "24px 0 12px",
         }}
       >
         <Odometer value={Math.abs(result.vsShareUsd)} prefix="$" decimals={2} />
@@ -193,6 +194,12 @@ function ReceiptBlock({ result }: { result: TxReconciliation }) {
 // with getSignaturesForAddress on the OpenAI token's mint. Chosen because it overpaid (about $2.82,
 // 1.9%, when read the same day), which is what this page exists to show. It only prefills the input;
 // every figure shown for it is read live off the chain at the moment of the check.
+// A trade prints as a receipt on paper, a wallet as a ledger on paper: the same paper as the ticket.
+const PAPER_CSS = `
+.proof-paper{--surface:#EAE4D4;margin-top:8px}
+.proof-paper .wb-num{color:inherit}
+`;
+
 // The wallet behind that purchase, for the wallet scan's example.
 const DEMO_WALLET = "6CtLg5reXUya6bdxG14iHzYFxeJw2FAhm2evq93TTyBH";
 
@@ -204,7 +211,9 @@ const EXAMPLE_SIG =
 // state 92ms in and pushed everything below it down by ~700px (CLS 0.09 at 390).
 export default function ProofClient({ initialSig, initialWallet = null }: { initialSig: string | null; initialWallet?: string | null }) {
   const [sigInput, setSigInput] = useState(initialSig ?? initialWallet ?? "");
-  const [signature, setSignature] = useState<string | null>(initialSig);
+  // with nothing pasted, the real example trade prints on load, so the page always shows its paper
+  const [signature, setSignature] = useState<string | null>(initialSig ?? (initialWallet ? null : EXAMPLE_SIG));
+  const showingExample = !initialSig && !initialWallet && signature === EXAMPLE_SIG && sigInput === "";
   // a whole wallet instead of one trade: the same box takes either
   const [wallet, setWallet] = useState<string | null>(initialWallet);
   const [result, setResult] = useState<TxReconciliation | null>(null);
@@ -346,9 +355,10 @@ export default function ProofClient({ initialSig, initialWallet = null }: { init
           </button>
         </form>
 
+        <style dangerouslySetInnerHTML={{ __html: TICKET_CSS + PAPER_CSS }} />
         <div
           data-device="tx-reconciliation"
-          className="proof-reconcile-zone"
+          className={`proof-reconcile-zone${signature || wallet ? " ticket proof-paper" : ""}`}
           style={{
             transition: "border-color 320ms cubic-bezier(0.23, 1, 0.32, 1)",
             animation: "proof-listening 1600ms ease-in-out infinite",
@@ -381,13 +391,13 @@ export default function ProofClient({ initialSig, initialWallet = null }: { init
                   border: "1px solid var(--text-primary)",
                 }}
               >
-                Check a real trade
+                Try a real trade
               </button>
               <p style={{ ...dimText, marginTop: "12px", fontSize: "11px" }}>
                 a real $150 OpenAI purchase made on 24 September, read live off the chain
               </p>
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "18px" }}>
-                <button onClick={scanMine} style={buttonStyle}>Scan my wallet</button>
+                <button onClick={scanMine} style={buttonStyle}>Scan my own wallet</button>
                 <button
                   onClick={() => {
                     setSigInput(DEMO_WALLET);
@@ -395,7 +405,7 @@ export default function ProofClient({ initialSig, initialWallet = null }: { init
                   }}
                   style={buttonStyle}
                 >
-                  Scan a real wallet
+                  Try a real wallet
                 </button>
               </div>
             </div>
@@ -417,7 +427,12 @@ export default function ProofClient({ initialSig, initialWallet = null }: { init
             </div>
           )}
 
-          {result && !loading && !error && <ReceiptBlock result={result} />}
+          {result && !loading && !error && (
+            <>
+              {showingExample && <p style={{ ...dimText, fontSize: "11px", margin: "0 0 14px" }}>A real $150 OpenAI purchase from 24 September, read live: an example, until you paste your own.</p>}
+              <ReceiptBlock result={result} />
+            </>
+          )}
         </div>
 
         {/* One list of findings instead of the same four badges printed under five tokens: each

@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getQuote, getSwapTransaction, fetchPrices, rateLimitedRecently, NoRouteError, getMintExtensions } from "@/lib/jupiter";
 import { reconcileTransaction } from "@/lib/tx";
 import { TOKEN_LIST, getTokenBySymbol, USDC_MINT, getToken, displayName } from "@/lib/tokens";
 import type { ParsedExtension, QuoteResult } from "@/lib/types";
-import TradeTicket from "@/components/TradeTicket";
-import ControlsSection from "@/components/ControlsSection";
+import TradeTicket, { type TicketHandle } from "@/components/TradeTicket";
+import Sparkline from "@/components/Sparkline";
+import TicketControls from "@/components/TicketControls";
 import Advice from "@/components/Advice";
 
 const usd0 = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
@@ -26,6 +27,22 @@ export default function Home() {
   const [settling, setSettling] = useState(false);
   // the size the advice found that passes, offered again where the order is placed
   const [lead, setLead] = useState<number | null>(null);
+  const [searching, setSearching] = useState(true);
+  // the cut: the ticket tears when the order is cut to a size that fits (design/CREATIVE.md, 1)
+  const ticketRef = useRef<TicketHandle>(null);
+  const useAmount = (n: number) => {
+    ticketRef.current?.cut();
+    setAmount(String(n));
+  };
+  // watch the line: a blocked ticket re-quotes every 30 s until it clears (device 2)
+  const [watching, setWatching] = useState(false);
+  const [readings, setReadings] = useState<{ t: number; pct: number }[]>([]);
+  // when the next check is due, and what a finished watch found
+  const [nextAt, setNextAt] = useState<number | null>(null);
+  const [tick, setTick] = useState(0);
+  const [watchResult, setWatchResult] = useState<{ at: number; checks: number; pct: number } | null>(null);
+  const [notify, setNotify] = useState<"granted" | "denied" | "default" | "none">("none");
+  const [copied, setCopied] = useState(false);
   const [costByToken, setCostByToken] = useState<Record<string, number | null>>({});
   // no exchange can fill this size right now: a finding, shown as one (PRD-V3 R2b)
   const [noRoute, setNoRoute] = useState(false);
@@ -70,9 +87,15 @@ export default function Home() {
     setAmount(e.target.value);
   };
 
+  // each request is numbered; an answer to an earlier order is thrown away
+  const reqId = useRef(0);
   useEffect(() => {
     const fetchQuote = async () => {
       setError("");
+      // the ticket never shows the previous order's figures under the new order's name
+      setQuote(null);
+      setCostByToken({});
+      const mine = ++reqId.current;
       const amountNum = parseFloat(amount);
       if (!amountNum || amountNum < 10 || amountNum > 25000) {
         // Leaving the previous quote up would put a remembered number on the surface for an
@@ -103,12 +126,14 @@ export default function Home() {
         const slippageBps = Math.max(1, Math.min(5000, Math.round(limit * 100)));
         setNoRoute(false);
         const q = await getQuote(USDC_MINT, token.mint, amountInLamports, slippageBps);
+        if (mine !== reqId.current) return;
         if (q) {
           setQuote(q);
         } else {
           throw new Error("no quote returned");
         }
       } catch (err) {
+        if (mine !== reqId.current) return;
         if (err instanceof NoRouteError) {
           // not a failure of the app: the market cannot take an order this size right now
           setQuote(null);
@@ -135,6 +160,117 @@ export default function Home() {
     setInitialized(true);
     return () => clearTimeout(timer);
   }, [amount, selectedToken, worstFillPct]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // any change to the order ends the watch: it was watching a different ticket
+  useEffect(() => {
+    setWatching(false);
+    setReadings([]);
+    setWatchResult(null);
+  }, [selectedToken, amount, worstFillPct]);
+  // a one-second tick for the countdown, only while watching
+  useEffect(() => {
+    if (!watching) return;
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [watching]);
+  useEffect(() => {
+    if (typeof Notification !== "undefined") setNotify(Notification.permission);
+  }, [watching]);
+  // the tab says what the ticket is doing
+  useEffect(() => {
+    if (watching) document.title = "Watching the line · THE MARK";
+    else if (watchResult) document.title = "Cleared · THE MARK";
+    else document.title = "THE MARK";
+    return () => {
+      document.title = "THE MARK";
+    };
+  }, [watching, watchResult]);
+
+  useEffect(() => {
+    if (!watching) return;
+    const token = getTokenBySymbol(selectedToken);
+    const amt = parseFloat(amount);
+    const limit = Number.isFinite(worstFillPct) ? worstFillPct : 0;
+    if (!token || !(amt >= 10)) {
+      setWatching(false);
+      return;
+    }
+    let cancelled = false;
+    let checks = 0;
+    const bps = Math.max(1, Math.min(5000, Math.round(limit * 100)));
+    const read = async () => {
+      setNextAt(Date.now() + 30_000);
+      try {
+        const q = await getQuote(USDC_MINT, token.mint, String(Math.floor(amt * 1e6)), bps, { advice: true });
+        if (cancelled || !q) return;
+        checks += 1;
+        setReadings((r) => [...r.slice(-59), { t: Date.now(), pct: q.fillCostPct }]);
+        // the ticket shows the latest reading, so its figure and "lowest" agree
+        setQuote(q);
+        setNoRoute(false);
+        if (q.fillCostPct <= limit) {
+          setWatchResult({ at: Date.now(), checks, pct: q.fillCostPct });
+          setWatching(false);
+          if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+            new Notification("THE MARK: your order clears", {
+              body: `${usd0(amt)} of ${displayName(selectedToken)} now costs ${q.fillCostPct.toFixed(2)}%, under your ${limit.toFixed(2)}% limit.`,
+            });
+          }
+        }
+      } catch {
+        // a failed reading is skipped; the next one comes in 30 s
+      }
+    };
+    read();
+    const id = setInterval(read, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watching]);
+
+  const startWatching = () => {
+    setReadings([]);
+    setWatchResult(null);
+    setWatching(true);
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission().then((p) => setNotify(p));
+    }
+  };
+  const secsToNext = nextAt ? Math.max(0, Math.round((nextAt - Date.now()) / 1000)) : null;
+  void tick;
+
+  // a ticket is a link: its stock, amount and limit live in the URL (device 8)
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const stock = sp.get("stock");
+    const amt = sp.get("amount");
+    const lim = sp.get("limit");
+    const t = stock ? TOKEN_LIST.find((x) => x.symbol.toLowerCase() === stock.toLowerCase() || displayName(x.symbol).toLowerCase() === stock.toLowerCase()) : undefined;
+    if (t) setSelectedToken(t.symbol);
+    if (amt && /^\d+(\.\d+)?$/.test(amt)) setAmount(amt);
+    if (lim && /^\d+(\.\d+)?$/.test(lim)) setWorstFillPct(parseFloat(lim));
+  }, []);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const sp = new URLSearchParams();
+      sp.set("stock", displayName(selectedToken));
+      sp.set("amount", amount);
+      if (Number.isFinite(worstFillPct)) sp.set("limit", String(worstFillPct));
+      window.history.replaceState(null, "", `/check?${sp}`);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [selectedToken, amount, worstFillPct]);
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // the clipboard was refused: the address bar still has the link
+    }
+  };
 
   // A blank "worst fill" field yields NaN, and every comparison against NaN is false, which
   // silently removed the only guard in the product. An unreadable line is treated as the
@@ -290,56 +426,84 @@ export default function Home() {
     return [...new Set(names)] as string[];
   })();
 
-  // the ticket's foot is the verdict; the action it leads to is step 4, beside the controls
+  // the ticket's foot: the verdict, and what to do about it (PRD-V5). Blocked: the cut and the watch.
+  // Clears: the order button.
   const foot = shouldRefuse && (quote || noRoute) ? (
-    <div data-refusal className="tk-refusal">
-      {noRoute || !quote
-        ? "Not placed. No exchange can fill this order right now."
-        : limitIsSet
-          ? `Not placed. ${quote.fillCostPct.toFixed(2)}% is over your ${effectiveLimit.toFixed(2)}% limit.`
-          : "Not placed. Set your limit in step 3."}
-    </div>
+    <>
+      <div data-refusal className="tk-refusal">
+        {noRoute || !quote
+          ? "Not placed. No exchange can fill this order right now."
+          : limitIsSet
+            ? `Not placed. ${quote.fillCostPct - effectiveLimit < 0.005 ? "Under 0.01" : (quote.fillCostPct - effectiveLimit).toFixed(2)} points over your line.`
+            : "Not placed. Type your limit on the line."}
+      </div>
+      {quote && (
+        <p className="tk-why">
+          {lead
+            ? `Cut it down to ${usd0(lead)}, the largest size that fits under your line, or leave the ticket to watch the line until it clears.`
+            : searching
+              ? "Looking for the largest size that fits under your line."
+              : "No smaller size fits under your line right now. Watch the line, or raise it."}
+        </p>
+      )}
+      <div className="tk-actions">
+        {lead ? (
+          <button data-use-amount className="tk-place tk-cut" onClick={() => useAmount(lead)}>
+            Cut to {usd0(lead)} <span aria-hidden>→</span>
+          </button>
+        ) : null}
+        {quote && !watching && (
+          <button className="tk-ghost" onClick={startWatching}>
+            Watch the line
+          </button>
+        )}
+      </div>
+      {watching && quote && (
+        <div className="tk-watch" data-watch>
+          <div className="tk-watch-h">
+            <span className="tk-watch-k">Watching the line</span>
+            <span className="tk-watch-next">{secsToNext === null ? "reading now" : secsToNext === 0 ? "reading now" : `next check in ${secsToNext}s`}</span>
+          </div>
+          <p className="tk-watch-p">
+            Every 30 seconds THE MARK re-quotes this exact order, {usd0(amountNum)} of {displayName(selectedToken)}. The moment it fits under your{" "}
+            {effectiveLimit.toFixed(2)}% line, the ticket clears{notify === "granted" ? " and you get a browser notification" : ""}, and you can place it.
+            {readings.length ? ` Checked ${readings.length} time${readings.length === 1 ? "" : "s"} so far.` : ""}
+          </p>
+          <Sparkline readings={readings} limit={effectiveLimit} />
+          <div className="tk-watch-foot">
+            <button className="tk-ghost" onClick={() => setWatching(false)}>
+              Stop watching
+            </button>
+            <span className="tk-watch-note">
+              {notify === "granted"
+                ? "Notifications on. Leave this tab open."
+                : notify === "denied"
+                  ? "Notifications are blocked in this browser, so keep this tab in view."
+                  : "Allow notifications to be told when it clears, or keep this tab in view."}
+            </span>
+          </div>
+        </div>
+      )}
+    </>
   ) : quote ? (
-    <div className="tk-ok">Within your {effectiveLimit.toFixed(2)}% limit</div>
+    <>
+      <div className="tk-ok">
+        Within your line{limitIsSet ? ` at ${effectiveLimit.toFixed(2)}%` : ""}.
+        {watchResult ? ` Cleared at ${new Date(watchResult.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}, after ${watchResult.checks} check${watchResult.checks === 1 ? "" : "s"}, at ${watchResult.pct.toFixed(2)}%.` : ""}
+      </div>
+      <button onClick={connected ? handleSign : handleConnect} disabled={signing || settling} className="tk-place">
+        {!connected ? "Connect a wallet to place this order" : signing ? "Signing…" : settling ? "Waiting for the chain…" : "Place this order"}
+      </button>
+    </>
   ) : null;
 
-  const action = (
-    <div className="v3-card v3-act" data-action>
-      <div className="v3-act-label"><span className="step-n">4</span>place the order</div>
-      {shouldRefuse && (quote || noRoute) ? (
-        lead ? (
-          <>
-            <p className="v3-act-blocked">
-              Blocked at this size. {usd0(lead)} of {displayName(selectedToken)} stays under your limit.
-            </p>
-            <button data-use-amount className="tk-place v3-lead" onClick={() => setAmount(String(lead))}>
-              Use {usd0(lead)} instead
-            </button>
-          </>
-        ) : (
-          <p className="v3-act-blocked">
-            Blocked. {noRoute ? "No exchange can fill it." : "It costs more than your limit."} Checking for a size that fits…
-          </p>
-        )
-      ) : quote ? (
-        <button onClick={connected ? handleSign : handleConnect} disabled={signing || settling} className="tk-place">
-          {!connected ? "Connect a wallet to place this order" : signing ? "Signing…" : settling ? "Waiting for the chain…" : "Place this order"}
-        </button>
-      ) : (
-        <p className="v3-act-blocked">Waiting for a live price.</p>
-      )}
-    </div>
-  );
-
   return (
-    <div style={{ width: "100%", minHeight: "100vh" }}>
-      {/* two columns at >= 1100px: the ticket on the left, what you set and what you can do instead
-          on the right. On a phone: the ticket, the alternatives, then the controls (PRD-V3 R6). */}
+    <div className="ck">
       <style dangerouslySetInnerHTML={{ __html: PAGE_CSS }} />
-
-      <div className="v3-grid">
-        <div className="v3-hero">
+      <div className="ck-grid">
+        <div className="ck-main">
           <TradeTicket
+            ref={ticketRef}
             symbol={selectedToken}
             amountUsd={amountNum}
             limitPct={effectiveLimit}
@@ -349,32 +513,31 @@ export default function Home() {
             failed={Boolean(error) && !quote}
             mintExt={mintExt}
             routeNames={routeNames}
+            onLimitChange={setWorstFillPct}
+            watching={watching}
+            controls={
+              <TicketControls
+                selected={selectedToken}
+                onSelect={setSelectedToken}
+                costByToken={quote ? { ...costByToken, [selectedToken]: quote.fillCostPct } : costByToken}
+                limit={effectiveLimit}
+                amount={amount}
+                onAmount={handleAmountChange}
+                onSlider={handleSliderChange}
+              />
+            }
           >
             {foot}
           </TradeTicket>
+          {quote && (
+            <button className="ck-copy" onClick={copyLink}>
+              {copied ? "Link copied" : "Copy a link to this ticket"}
+            </button>
+          )}
+          {error && <div className="v3-error">{error}</div>}
         </div>
-
-        <div className="v3-controls" data-controls>
-          <div className="v3-card">
-            <ControlsSection
-              selectedToken={selectedToken}
-              onSelectToken={setSelectedToken}
-              amount={amount}
-              onAmountChange={handleAmountChange}
-              onSliderChange={handleSliderChange}
-              worstFillPct={worstFillPct}
-              onLimitChange={setWorstFillPct}
-              costByToken={quote ? { ...costByToken, [selectedToken]: quote.fillCostPct } : costByToken}
-              blocked={shouldRefuse}
-            />
-            {error && <div className="v3-error">{error}</div>}
-          </div>
-        </div>
-
-        <div className="v3-action">{action}</div>
-
-        <div className="v3-advice">
-          {/* no live price: no advice to give, so no empty card */}
+        <aside className="ck-side">
+          {/* no live price: no advice to give, so no empty stubs */}
           {!(error && !quote) && (
             <Advice
               symbol={selectedToken}
@@ -384,61 +547,57 @@ export default function Home() {
               noRoute={noRoute}
               quote={quote}
               costByToken={costByToken}
-              onUseAmount={(n) => setAmount(String(n))}
-              onLead={setLead}
+              onUseAmount={useAmount}
+              onLead={(n) => {
+                // during a watch each reading re-runs the search; the last size that fit stays on the ticket
+                if (n !== null || !watching) setLead(n);
+              }}
+              onSearching={setSearching}
+              stubs
             />
           )}
-        </div>
+        </aside>
       </div>
-
-      <nav className="v3-also" aria-label="Also in THE MARK">
-        {[
-          { href: "/census", title: "Compare stocks", text: "Every stock at three order sizes, side by side." },
-          { href: "/proof", title: "Verify a trade", text: "Paste any trade and see what it really cost." },
-        ].map((l) => (
-          <a key={l.href} href={l.href} className="v3-link">
-            <span className="v3-link-t">{l.title} <span aria-hidden>→</span></span>
-            <span className="v3-link-d">{l.text}</span>
-          </a>
-        ))}
-      </nav>
     </div>
   );
 }
 
 const PAGE_CSS = `
-.v3-grid{max-width:1240px;margin:0 auto;padding:48px 24px 40px;display:grid;gap:32px;
-  grid-template-columns:1fr;grid-template-areas:"hero" "controls" "action" "advice"}
-.v3-hero{grid-area:hero;min-width:0}.v3-action{grid-area:action;min-width:0}.v3-controls{grid-area:controls;min-width:0}.v3-advice{grid-area:advice;min-width:0}
-@media (min-width:1100px){
-  .v3-grid{grid-template-columns:minmax(0,1.25fr) minmax(0,0.95fr);column-gap:48px;row-gap:24px;
-    grid-template-areas:"hero controls" "hero action" "hero advice";grid-template-rows:auto auto 1fr;align-items:start}
-}
-.v3-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:22px}
+.ck{padding:28px 20px 72px}
+.ck-grid{max-width:1120px;margin:0 auto;display:grid;gap:28px;grid-template-columns:1fr;align-items:start}
+@media (min-width:1000px){.ck-grid{grid-template-columns:minmax(0,760px) 300px;justify-content:center;gap:36px}.ck-side{position:sticky;top:84px;padding-top:12px}}
+.ck-main{min-width:0}
+.ck-copy{display:block;margin:12px auto 0;background:none;border:none;padding:0;color:var(--text-dim);font-family:Archivo,sans-serif;font-size:13px;
+  text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .v3-error{margin-top:16px;padding:12px 14px;border:1px solid var(--signal);border-radius:6px;
   background:rgba(196,38,29,.08);font-family:Archivo,sans-serif;font-size:14px;line-height:1.5}
-.tk-refusal{font-family:Archivo,sans-serif;font-size:16px;font-weight:600;color:var(--signal);
-  padding:14px 16px;border:2px solid var(--signal);border-radius:6px;animation:refuse-in 180ms cubic-bezier(.23,1,.32,1)}
-.v3-act-label{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
-  color:var(--text-dim);margin-bottom:12px;display:flex;align-items:center}
-.v3-act .tk-place.v3-lead{margin-top:12px;text-transform:none;letter-spacing:0;font-size:16px;background:#3DBE74;color:#06140C;box-shadow:0 4px 0 #1E6B41}
-.v3-act .tk-place{background:#F3EEE2;color:#17140F;box-shadow:0 4px 0 #8C8676}
-.v3-act .tk-place:hover{box-shadow:0 5px 0 #8C8676}.v3-act .tk-place:active{box-shadow:0 1px 0 #8C8676}
-.v3-act-blocked{font-family:Archivo,sans-serif;font-size:15px;line-height:1.5;color:var(--text-muted);margin:0}
-.tk-ok{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--success);margin-bottom:10px}
-.tk-place{width:100%;padding:16px;border-radius:6px;border:none;background:#17140F;color:#F3EEE2;
-  font-family:Archivo,sans-serif;font-size:14px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
-  cursor:pointer;transition:transform 120ms ease-out,box-shadow 160ms ease-out;box-shadow:0 4px 0 #000}
+.tk-refusal{font-family:Archivo,sans-serif;font-size:16px;font-weight:600;color:var(--signal);margin-bottom:12px;animation:refuse-in 180ms cubic-bezier(.23,1,.32,1)}
+.tk-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.tk-ok{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--success);margin-bottom:10px}
+.tk-place{padding:14px 18px;border-radius:6px;border:none;background:#17140F;color:#F3EEE2;
+  font-family:Archivo,sans-serif;font-size:15px;font-weight:700;letter-spacing:0;cursor:pointer;
+  transition:transform 120ms ease-out,box-shadow 160ms ease-out;box-shadow:0 4px 0 #000}
 .tk-place:hover{transform:translateY(-1px);box-shadow:0 5px 0 #000}
 .tk-place:active{transform:translateY(3px);box-shadow:0 1px 0 #000}
 .tk-place:disabled{opacity:.6;cursor:wait}
-.v3-also{max-width:1240px;margin:0 auto;padding:8px 24px 72px;display:grid;gap:14px;
-  grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
-.v3-link{display:block;text-decoration:none;padding:18px 20px;border:1px solid var(--border);border-radius:10px;
-  transition:border-color 160ms ease-out,transform 160ms ease-out}
-.v3-link:hover{border-color:var(--text-dim);transform:translateY(-2px)}
-.v3-link-t{display:block;font-family:Archivo,sans-serif;font-size:16px;font-weight:500;color:var(--text-primary);margin-bottom:4px}
-.v3-link-d{display:block;font-family:Archivo,sans-serif;font-size:14px;color:var(--text-muted)}
+.tk-place:not(.tk-cut){width:100%}
+.tk-cut{background:#0B7A3B;box-shadow:0 4px 0 #064d24}
+.tk-cut:hover{box-shadow:0 5px 0 #064d24}
+.tk-cut span{display:inline-block;transition:transform .16s ease-out}
+.tk-cut:hover span{transform:translateX(3px)}
+.tk-ghost{padding:13px 16px;border-radius:6px;border:1.5px solid #17140F;background:transparent;color:#17140F;
+  font-family:Archivo,sans-serif;font-size:14px;font-weight:600;cursor:pointer}
+.tk-ghost:hover{background:rgba(23,20,15,.06)}
+.tk-why{font-family:Archivo,sans-serif;font-size:14px;line-height:1.5;color:var(--text-muted);margin:0 0 12px;max-width:56ch}
+.tk-watch{margin-top:14px;padding-top:14px;border-top:2px dashed var(--border)}
+.tk-watch-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.tk-watch-k{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-primary);font-weight:600}
+.tk-watch-k::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--signal);margin-right:8px;vertical-align:middle;animation:watch-pulse 1.4s ease-in-out infinite}
+.tk-watch-next{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);font-variant-numeric:tabular-nums}
+.tk-watch-p{font-family:Archivo,sans-serif;font-size:14px;line-height:1.5;color:var(--text-muted);margin:8px 0 0;max-width:60ch}
+.tk-watch-foot{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:6px}
+.tk-watch-note{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--text-dim)}
+@keyframes watch-pulse{0%,100%{opacity:.35}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.tk-watch-k::before{animation:none}}
 @media (prefers-reduced-motion:reduce){.tk-refusal{animation:none}}
 `;

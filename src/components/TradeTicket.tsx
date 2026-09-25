@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { forwardRef, useImperativeHandle, useRef, type ReactNode } from "react";
+import { TEAR_CSS, useTicketCut } from "@/components/TicketCut";
 import { displayName } from "@/lib/tokens";
 import type { ParsedExtension, QuoteResult } from "@/lib/types";
 import Odometer from "@/components/Odometer";
@@ -17,6 +18,12 @@ interface TradeTicketProps {
   failed: boolean;
   mintExt: ParsedExtension[] | null | undefined;
   routeNames: string[];
+  // what the reader sets, printed on the ticket above the perforation
+  controls?: ReactNode;
+  // the limit is typed into the line's own label
+  onLimitChange?: (v: number) => void;
+  // the ticket is being watched: the stamp says so instead of BLOCKED
+  watching?: boolean;
   // the ticket's foot: the refusal, or the button that places the order
   children?: ReactNode;
 }
@@ -24,48 +31,49 @@ interface TradeTicketProps {
 const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 const joinNames = (a: string[]) => (a.length <= 1 ? a.join("") : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`);
 
+export type TicketHandle = { cut: () => void };
+
 // The order as a ticket: printed on paper, read line by line, and stamped BLOCKED when it costs more
-// than the reader allows. Every figure on it comes off the live quote already on the page.
-export default function TradeTicket(props: TradeTicketProps) {
+// than the reader allows. Every figure on it comes off the live quote already on the page. The page
+// can cut it: the ticket tears and the smaller one is revealed (design/CREATIVE.md, device 1).
+const TradeTicket = forwardRef<TicketHandle, TradeTicketProps>(function TradeTicket(props, handle) {
   const { symbol, amountUsd, quote, blocked } = props;
   const name = displayName(symbol);
+  const art = useRef<HTMLElement>(null);
+  const { cut, overlay } = useTicketCut(art);
+  useImperativeHandle(handle, () => ({ cut }), [cut]);
 
   return (
     <div data-hero style={{ width: "100%" }}>
       <style dangerouslySetInnerHTML={{ __html: TICKET_CSS }} />
-      <h1 className="tk-h1">Don&apos;t be the mark.</h1>
-      <p className="tk-lede">
-        THE MARK shows what a tokenized stock really costs you before you buy it on Solana, and stops the
-        trade if that cost is more than you allow.
-      </p>
-      <ol className="tk-steps" aria-label="How it works">
-        <li><span className="step-n">1</span>Pick a stock</li>
-        <li><span className="step-n">2</span>Set how much</li>
-        <li><span className="step-n">3</span>Set your limit</li>
-        <li><span className="step-n">4</span>Place it</li>
-        <li className="tk-steps-end">Over your limit, THE MARK blocks it</li>
-      </ol>
-
-      <article className="ticket">
+      <div className="tk-wrap">
+      <article className="ticket" ref={art} data-ticket>
         <header className="tk-head">
           <span>Order ticket</span>
           <span>Buy with USDC</span>
         </header>
-        <div className="tk-order">
-          <span className="tk-stock">{name}</span>
-          <span className="tk-amt">{usd(amountUsd)}</span>
-        </div>
+        {props.controls ?? (
+          <div className="tk-order">
+            <span className="tk-stock">{name}</span>
+            <span className="tk-amt">{usd(amountUsd)}</span>
+          </div>
+        )}
         <hr className="tk-perf" />
         <TicketCost {...props} name={name} />
-        <IssuerSummary symbol={symbol} extensions={props.mintExt} loading={props.mintExt === undefined} />
-        {quote && <TicketRows quote={quote} routeNames={props.routeNames} amountUsd={amountUsd} />}
+        {/* the verdict and the way out sit right under the stamp, on the first screen */}
         <footer className="tk-foot">{props.children}</footer>
+        <IssuerSummary symbol={symbol} extensions={props.mintExt} loading={props.mintExt === undefined} />
+        {quote && <TicketRows quote={quote} routeNames={props.routeNames} />}
       </article>
+      {overlay}
+      </div>
     </div>
   );
-}
+});
 
-function TicketCost({ quote, noRoute, failed, blocked, name, amountUsd, limitPct }: TradeTicketProps & { name: string }) {
+export default TradeTicket;
+
+function TicketCost({ quote, noRoute, failed, blocked, name, amountUsd, limitPct, onLimitChange, watching }: TradeTicketProps & { name: string }) {
   return (
     <>
       <div className="tk-label">What this order costs you</div>
@@ -96,11 +104,12 @@ function TicketCost({ quote, noRoute, failed, blocked, name, amountUsd, limitPct
           fillPct={quote?.fillCostPct ?? 0}
           amountUsd={amountUsd}
           isBlocked={blocked}
+          onLimitChange={onLimitChange}
         />
-        {/* stamped beside the line, in the space under the limit, never over the figure */}
+        {/* stamped beside the figure on a wide screen, under the line on a phone, never over the figure */}
         {blocked && (quote || noRoute) && (
-          <div data-seal className="tk-stamp" aria-label="Blocked">
-            BLOCKED
+          <div data-seal key={watching ? "watch" : "block"} className={`tk-stamp${watching ? " is-watch" : ""}`} aria-label={watching ? "Watching the line" : "Blocked"}>
+            {watching ? "WATCHING" : "BLOCKED"}
           </div>
         )}
         {!blocked && quote && (
@@ -113,27 +122,14 @@ function TicketCost({ quote, noRoute, failed, blocked, name, amountUsd, limitPct
   );
 }
 
-function TicketRows({ quote, routeNames, amountUsd }: { quote: QuoteResult; routeNames: string[]; amountUsd: number }) {
+function TicketRows({ quote, routeNames }: { quote: QuoteResult; routeNames: string[] }) {
   const kept = Math.max(0, quote.amountInUsd - quote.fillCostUsd);
-  const poolShare = quote.liquidityUsd ? (amountUsd / quote.liquidityUsd) * 100 : null;
   return (
     <div className="tk-rows">
-      <div data-kept>
-        <div className="tk-row">
-          <span>You keep, in shares</span>
-          <b className="tk-good"><Odometer value={kept} prefix="$" /></b>
-        </div>
-        <div className="tk-row">
-          <span>Goes to costs</span>
-          <b className="tk-bad"><Odometer value={quote.fillCostUsd} prefix="$" /></b>
-        </div>
+      <div data-kept className="tk-row">
+        <span>You keep, in shares</span>
+        <b className="tk-good"><Odometer value={kept} prefix="$" /></b>
       </div>
-      {poolShare !== null && (
-        <div className="tk-row">
-          <span>Share of everything on sale that this order takes</span>
-          <b>{poolShare.toFixed(2)}%</b>
-        </div>
-      )}
       <p data-route className="tk-route">
         {routeNames.length ? `Fills through ${joinNames(routeNames)}.` : "Where this order fills is shown once it is quoted."}
       </p>
@@ -143,7 +139,7 @@ function TicketRows({ quote, routeNames, amountUsd }: { quote: QuoteResult; rout
 
 // Paper on a dark page. The ticket redefines the page's colour tokens, so the limit line and the
 // issuer list inside it print in ink without knowing they are on paper.
-export const TICKET_CSS = `
+export const TICKET_CSS = TEAR_CSS + `
 .tk-h1{font-family:Archivo,sans-serif;font-weight:600;font-size:clamp(34px,4.2vw,56px);line-height:1.02;
   letter-spacing:-0.02em;color:var(--text-primary);margin:0 0 12px}
 .tk-lede{font-family:Archivo,sans-serif;font-size:clamp(16px,1.5vw,19px);line-height:1.45;color:var(--text-muted);
@@ -173,7 +169,7 @@ export const TICKET_CSS = `
 .tk-perf{border:none;border-top:2px dashed var(--border);margin:20px -8px 22px}
 .tk-label{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
   color:var(--text-dim);margin-bottom:22px}
-.tk-cost{font-family:"JetBrains Mono",monospace;font-weight:600;font-size:clamp(56px,7.4vw,112px);line-height:1;
+.tk-cost{font-family:"JetBrains Mono",monospace;font-weight:600;font-size:clamp(52px,6.4vw,96px);line-height:1;
   min-height:1em;letter-spacing:-0.03em;font-variant-numeric:tabular-nums;color:var(--text-primary);
   transition:color 320ms ease-out}
 .tk-cost.is-blocked{color:var(--signal)}
@@ -193,19 +189,24 @@ export const TICKET_CSS = `
 .tk-row b{font-family:"JetBrains Mono",monospace;font-weight:600;color:var(--text-primary);white-space:nowrap}
 .tk-row b.tk-good{color:var(--success)}.tk-row b.tk-bad{color:var(--signal)}
 .tk-route{font-family:Archivo,sans-serif;font-size:14px;color:var(--text-dim);margin:6px 0 0}
-.tk-foot:not(:empty){margin-top:22px}
+.tk-foot{min-height:150px}
+.tk-foot:not(:empty){margin-top:8px;padding-top:18px;border-top:2px dashed var(--border)}
+.lt-ticket .tk-foot{min-height:0}
 .tk-line{position:relative}
 @media (max-width:640px){.tk-line{padding-bottom:46px}.tk-stamp{bottom:0}}
+@media (min-width:901px){.tk-line .tk-stamp{bottom:auto;top:-128px;right:6px}.lt-ticket .tk-line .tk-stamp{top:-108px}}
+.tk-stamp.is-watch{color:#17140F;border-color:#17140F}
+.tk-stamp.is-clear{color:#0B7A3B;border-color:#0B7A3B}
 .tk-stamp{position:absolute;right:0;bottom:4px;z-index:5;pointer-events:none;
   font-family:Archivo,sans-serif;font-weight:800;font-size:clamp(24px,2.6vw,34px);letter-spacing:.12em;
   color:#C4261D;border:4px double #C4261D;border-radius:6px;padding:4px 16px 2px;transform:rotate(-8deg);
   opacity:.9;will-change:transform,opacity;
   -webkit-mask-image:radial-gradient(circle at 30% 40%,#000 55%,rgba(0,0,0,.72) 75%,#000 100%);
   mask-image:radial-gradient(circle at 30% 40%,#000 55%,rgba(0,0,0,.72) 75%,#000 100%);
-  animation:tk-slam 460ms cubic-bezier(.2,1.3,.35,1) both}
+  animation:tk-slam 320ms cubic-bezier(.2,1.3,.35,1) both}
 @keyframes tk-print{from{transform:translateY(-18px) rotate(-.6deg)}to{transform:none}}
 .tk-stamp.is-clear{color:#0B7A3B;border-color:#0B7A3B}
-@keyframes tk-slam{0%{opacity:0;transform:rotate(-18deg) scale(2.6)}55%{opacity:.95;transform:rotate(-7deg) scale(.93)}
+@keyframes tk-slam{0%{opacity:0;transform:rotate(-14deg) scale(1.35)}55%{opacity:.95;transform:rotate(-7deg) scale(.96)}
   100%{opacity:.9;transform:rotate(-8deg) scale(1)}}
 @keyframes tk-shine{to{transform:translateX(100%)}}
 @media (prefers-reduced-motion:reduce){.ticket,.tk-stamp,.tk-shimmer::after{animation:none!important}}

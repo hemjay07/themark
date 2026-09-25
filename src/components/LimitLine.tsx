@@ -8,6 +8,8 @@ interface LimitLineProps {
   fillPct: number;
   amountUsd: number;
   isBlocked: boolean;
+  // when given, the label is the limit's own input
+  onLimitChange?: (v: number) => void;
 }
 
 // The limit line as a full-width hero device. A white post at the left (what you pay),
@@ -21,6 +23,7 @@ export default function LimitLine({
   fillPct,
   amountUsd,
   isBlocked,
+  onLimitChange,
 }: LimitLineProps) {
   // Calculate bar width as percentage of limit. Cap at reasonable max to avoid too-wide bars.
   const barWidthPct = useMemo(() => {
@@ -43,7 +46,7 @@ export default function LimitLine({
     <div
       style={{
         width: "100%",
-        padding: "32px 0",
+        padding: "22px 0 18px",
         fontFamily: '"JetBrains Mono", monospace',
       }}
     >
@@ -128,7 +131,24 @@ export default function LimitLine({
               textTransform: "uppercase",
             }}
           >
-            your limit {limitPct.toFixed(2)}%
+            {onLimitChange ? (
+              <label className="ll-edit">
+                your limit{" "}
+                <input
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.01"
+                  defaultValue={Number.isFinite(limitPct) ? limitPct.toFixed(2) : ""}
+                  title="Type your limit, as a percentage of the order"
+                  onChange={(e) => onLimitChange(parseFloat(e.target.value))}
+                  aria-label="Your limit, as a percentage of the order"
+                />
+                %
+              </label>
+            ) : (
+              <>your limit {limitPct.toFixed(2)}%</>
+            )}
           </div>
         )}
 
@@ -159,6 +179,10 @@ export default function LimitLine({
 
       <style dangerouslySetInnerHTML={{
         __html: `
+          .ll-edit{cursor:text;pointer-events:auto}
+          .ll-edit input{width:5.2ch;background:transparent;border:none;border-bottom:2px solid currentColor;border-radius:0;color:inherit;
+            font:inherit;letter-spacing:0;text-align:right;padding:0 1px;outline:none;-moz-appearance:textfield}
+          .ll-edit input::-webkit-outer-spin-button,.ll-edit input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
           @keyframes seal-in {
             from { opacity: 0; transform: rotate(-7deg) scale(1.6); }
             to { opacity: 1; transform: rotate(-7deg) scale(1); }

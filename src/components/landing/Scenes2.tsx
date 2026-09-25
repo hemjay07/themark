@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getIssuerControls, getMintExtensions } from "@/lib/jupiter";
 import { reconcileTransaction, type TxReconciliation } from "@/lib/tx";
 import { TOKEN_LIST, displayName } from "@/lib/tokens";
 import Odometer from "@/components/Odometer";
 import Scene from "@/components/landing/Scene";
-import { useInView } from "@/lib/useInView";
 
 // The wallet behind the real OpenAI purchase that overpaid on 24 September (src/app/proof/ProofClient.tsx).
 export const DEMO_WALLET = "6CtLg5reXUya6bdxG14iHzYFxeJw2FAhm2evq93TTyBH";
@@ -24,11 +23,14 @@ type Read = { symbol: string; keys: string[] | null };
 
 export function SceneIssuer() {
   const [reads, setReads] = useState<Read[] | null>(null);
+  // the reads start shortly after load (not on scroll), so the page holds the same words however it
+  // is read; a short delay keeps them behind the hero's own reading
   const [near, setNear] = useState(false);
-  const { ref: nearRef, inView: nearView } = useInView<HTMLDivElement>(0.01);
+  const nearRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (nearView) setNear(true);
-  }, [nearView]);
+    const t = setTimeout(() => setNear(true), 1500);
+    return () => clearTimeout(t);
+  }, []);
   useEffect(() => {
     if (!near) return;
     let cancelled = false;
@@ -82,8 +84,13 @@ export function SceneIssuer() {
 export function SceneWallet() {
   const router = useRouter();
   const [q, setQ] = useState("");
-  // the example receipt is read off the chain as the scene comes near: its figure is live, like /proof's
-  const { ref: nearRef, inView: near } = useInView<HTMLDivElement>(0.01);
+  // the example receipt is read off the chain shortly after load: its figure is live, like /proof's
+  const nearRef = useRef<HTMLDivElement>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setNear(true), 2500);
+    return () => clearTimeout(t);
+  }, []);
   const [demo, setDemo] = useState<TxReconciliation | null | undefined>(undefined);
   useEffect(() => {
     if (!near) return;

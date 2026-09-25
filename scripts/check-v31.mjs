@@ -17,7 +17,7 @@ for (const width of [1440, 390]) {
   // wait for the advice to finish its live checks (it can queue behind other reads on a 1 req/s key)
   for (let i = 0; i < 40; i++) {
     await page.waitForTimeout(1000);
-    const ready = await page.evaluate(() => !!document.querySelector("[data-advice] [data-use-amount]"));
+    const ready = await page.evaluate(() => !!document.querySelector("[data-use-amount]"));
     if (ready) break;
   }
   const s = await page.evaluate(() => {
@@ -35,30 +35,14 @@ for (const width of [1440, 390]) {
       chipDots: [...document.querySelectorAll("[data-controls] button")].filter((b) => /…/.test(b.innerText)).length,
     };
   });
-  // 1. opens on a blocked order, and the best advice carries a button
-  check(width, 1, s.refusal && s.useBtn && /^Use \$/.test(s.useBtn.trim()), "does not open blocked with a 'Use $X' button");
-  // 2. phone, as amended by ASSESS-5 (design/PRD-V3.md): what you set, then placing it, then the
-  // alternatives, in that order, so the page reads input to outcome
-  if (width === 390) check(width, 2, s.advice && s.controls && s.action && s.controls.top < s.action.top && s.action.top < s.advice.top, "phone order is not controls, action, advice");
+  // 1, 1b and 2 (the 'Use $X' button, one click to placeable, the phone order) described V3.1;
+  // PRD-V5 replaces them with check-v5 #1 and #2 (the ticket, and 'Cut to $X')
   // 3. the two labels under the line do not overlap
   check(width, 3, s.legBar && s.legLimit && (s.legBar.right <= s.legLimit.left || s.legBar.bottom <= s.legLimit.top || s.legLimit.bottom <= s.legBar.top), "legend labels overlap");
-  // 4. the name is used, and the block stamps the line
-  check(width, 4, /don.t be the mark/i.test(s.h1) && s.seal, "headline or BLOCKED seal missing");
+  // 4. the block stamps the line (the headline lives on the story since PRD-V5)
+  check(width, 4, s.seal, "BLOCKED seal missing");
   // 6. chips never show a bare ellipsis
   check(width, 6, s.chipDots === 0, `${s.chipDots} stock chips show "…"`);
-
-  // 1b. one click on the advice makes the order placeable
-  if (s.useBtn) {
-    await page.click("[data-use-amount]");
-    let placeable = false;
-    for (let i = 0; i < 25 && !placeable; i++) {
-      await page.waitForTimeout(1000);
-      placeable = await page.evaluate(() =>
-        !document.querySelector("[data-refusal]") &&
-        [...document.querySelectorAll("button")].some((b) => /connect a wallet|place this order/i.test(b.innerText)));
-    }
-    check(width, "1b", placeable, "'Use $X' did not make the order placeable");
-  }
 
   // 5. census: no 3D strip, never 24 silent empty rows, plain footnote
   await page.goto(base + "/census", { waitUntil: "domcontentloaded" });
