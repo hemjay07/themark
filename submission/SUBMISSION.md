@@ -30,7 +30,7 @@ Most dashboards chart the gap between the token and the share. We measured that 
 ## What is proven, and what is not
 - **Tested:** the cost math has unit tests. `scripts/check-v3.mjs`, `check-v31.mjs`, `check-proof.mjs`, `check-v4.mjs` and `check-v5.mjs` pass against live data.
 - **Proven on chain:** `/proof` reconciles real mainnet trades and whole wallets.
-- **Not yet proven:** a trade signed through this app. _(to be replaced with its signature)_
+- **Proven through this app:** a $10.00 order of S&P 500 (SPYx), quoted, cleared at a 1% line, signed in Phantom and landed on mainnet on 25 September 2026 at 06:48 UTC. Its receipt: https://themark-nine.vercel.app/proof?sig=4aGuaMziy4PL9A8Tvfysyy7eGSmdksSzSSy1U6EUzQKQifSE5mMmsaRu1nnuBpAoNgJSEEbAhjqcowtULRKxn8b (signature `4aGuaMziy4PL9A8Tvfysyy7eGSmdksSzSSy1U6EUzQKQifSE5mMmsaRu1nnuBpAoNgJSEEbAhjqcowtULRKxn8b`, [on Solscan](https://solscan.io/tx/4aGuaMziy4PL9A8Tvfysyy7eGSmdksSzSSy1U6EUzQKQifSE5mMmsaRu1nnuBpAoNgJSEEbAhjqcowtULRKxn8b)).
 
 ## Honesty rules
 Every figure comes from a call made for it, or carries its date. The only shared reading is `/census`, cached for two minutes and labelled with its age. A failed read says so and shows nothing in its place. Prices for past trades are read now, not at the moment of the trade, and the page says so. The free Jupiter tier allows one request per second, so under load prices arrive more slowly; they are never filled in.
