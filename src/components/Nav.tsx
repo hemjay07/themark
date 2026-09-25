@@ -5,7 +5,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 
 // Full names where there is room; one word on a phone, where the full names ran off the screen.
 const ROUTES: Array<{ href: string; label: string; short: string }> = [
-  { href: "/", label: "Check an order", short: "Check" },
+  { href: "/check", label: "Check an order", short: "Check" },
   { href: "/census", label: "Compare stocks", short: "Compare" },
   { href: "/proof", label: "Verify a trade", short: "Verify" },
 ];
@@ -66,9 +66,14 @@ export default function Nav() {
         alignItems: "center",
         justifyContent: "space-between",
         gap: "24px",
-        padding: "16px 20px",
+        padding: "14px 20px",
         borderBottom: "1px solid var(--border)",
-        background: "var(--bg)",
+        background: "rgba(10,10,15,.82)",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+        position: "sticky",
+        top: 0,
+        zIndex: 50,
       }}
     >
       <a href="/" aria-label="THE MARK" style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
@@ -93,7 +98,9 @@ export default function Nav() {
             </a>
           );
         })}
-        {wallet ? (
+        {pathname !== "/check" ? (
+          <a className="nav-wallet nav-launch" href="/check">Launch app <span aria-hidden>→</span></a>
+        ) : wallet ? (
           <span className="nav-wallet is-on">{wallet.slice(0, 4)}…{wallet.slice(-4)}</span>
         ) : hasWallet ? (
           <button className="nav-wallet" onClick={connect}>Connect wallet</button>
@@ -108,6 +115,7 @@ export default function Nav() {
           border:1px solid var(--text-primary);background:var(--text-primary);color:var(--bg);cursor:pointer;
           text-decoration:none;white-space:nowrap;transition:transform 120ms ease-out}
         .nav-wallet:hover{transform:translateY(-1px)}
+        .nav-launch{background:var(--signal);border-color:var(--signal);color:#fff;border-radius:999px;padding:8px 16px}
         .nav-wallet.is-on{background:transparent;color:var(--text-muted);border-color:var(--border);cursor:default;
           font-family:"JetBrains Mono",monospace;font-weight:400}
         @media (max-width:640px){ .nav-wallet{display:none} }

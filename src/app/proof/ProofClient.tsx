@@ -6,6 +6,7 @@ import { getIssuerControls, getMintExtensions, getMultiplier, getTransferFeePerc
 import { displayName, TOKEN_LIST } from "@/lib/tokens";
 import type { IssuerControl } from "@/lib/types";
 import Odometer from "@/components/Odometer";
+import WalletBlock from "./WalletBlock";
 
 const mono: CSSProperties = {
   fontFamily: '"JetBrains Mono", monospace',
@@ -133,15 +134,15 @@ function ReceiptBlock({ result }: { result: TxReconciliation }) {
         <Odometer value={Math.abs(result.vsShareUsd)} prefix="$" decimals={2} />
       </div>
       <p style={{ fontFamily: "Archivo, sans-serif", fontSize: "18px", lineHeight: 1.45, color: "var(--text-primary)", margin: 0, maxWidth: "46ch" }}>
-        {over ? "more" : "less"} than {result.tokenReceived.toFixed(2)} shares of {name} are worth at the
-        real share price.
+        {over ? "more" : "less"} than {result.tokenReceived.toFixed(2)}{" "}
+        {result.referenceKind === "share" ? `shares of ${name} are worth at the real share price.` : `${name} tokens are worth at the token's price now. ${name} is a private company, so there is no public share price to hold it to.`}
       </p>
 
       <div className="proof-facts" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1px", background: "var(--border)", border: "1px solid var(--border)", borderRadius: "6px", overflow: "hidden", margin: "28px 0 14px" }}>
         {[
           ["you paid", `$${result.usdcSpent.toFixed(2)}`],
           ["you got", `${result.tokenReceived.toFixed(4)} ${name}`],
-          ["per share", `$${result.effectivePrice.toFixed(2)}, real $${result.referencePrice.toFixed(2)}`],
+          [result.referenceKind === "share" ? "per share" : "per token", `$${result.effectivePrice.toFixed(2)}, ${result.referenceKind === "share" ? "real" : "now"} $${result.referencePrice.toFixed(2)}`],
         ].map(([k, v]) => (
           <div key={k} style={{ background: "var(--surface)", padding: "16px" }}>
             <div style={microLabelSmall}>{k}</div>
@@ -151,7 +152,7 @@ function ReceiptBlock({ result }: { result: TxReconciliation }) {
       </div>
 
       <p style={{ ...dimText, fontSize: "12px", margin: "0 0 20px", maxWidth: "70ch" }}>
-        The real share price is read now{when ? `, not at the moment of the trade (${when})` : ""}, so
+        The {result.referenceKind === "share" ? "real share price" : "token's price"} is read now{when ? `, not at the moment of the trade (${when})` : ""}, so
         anything the market has done since is in this figure too.
       </p>
 
@@ -192,15 +193,20 @@ function ReceiptBlock({ result }: { result: TxReconciliation }) {
 // with getSignaturesForAddress on the OpenAI token's mint. Chosen because it overpaid (about $2.82,
 // 1.9%, when read the same day), which is what this page exists to show. It only prefills the input;
 // every figure shown for it is read live off the chain at the moment of the check.
+// The wallet behind that purchase, for the wallet scan's example.
+const DEMO_WALLET = "6CtLg5reXUya6bdxG14iHzYFxeJw2FAhm2evq93TTyBH";
+
 const EXAMPLE_SIG =
   "26DWMSrq96WP5BMv7x54jmA9ZC8PjT7CGJVtQ7bE7SwUArZbGWi4TnQ8ByweDCJ6s7MxKewnnPYEwk2TL5osD2aq";
 
 // The receipt code arrives from the server (page.tsx reads ?sig=), so the first paint is already the
 // loading state. Reading it from window.location after mount swapped the empty state for the loading
 // state 92ms in and pushed everything below it down by ~700px (CLS 0.09 at 390).
-export default function ProofClient({ initialSig }: { initialSig: string | null }) {
-  const [sigInput, setSigInput] = useState(initialSig ?? "");
+export default function ProofClient({ initialSig, initialWallet = null }: { initialSig: string | null; initialWallet?: string | null }) {
+  const [sigInput, setSigInput] = useState(initialSig ?? initialWallet ?? "");
   const [signature, setSignature] = useState<string | null>(initialSig);
+  // a whole wallet instead of one trade: the same box takes either
+  const [wallet, setWallet] = useState<string | null>(initialWallet);
   const [result, setResult] = useState<TxReconciliation | null>(null);
   const [loading, setLoading] = useState(Boolean(initialSig));
   const [error, setError] = useState("");
@@ -259,7 +265,31 @@ export default function ProofClient({ initialSig }: { initialSig: string | null 
   const submitSignature = () => {
     const trimmed = sigInput.trim();
     if (!trimmed) return;
+    if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed)) {
+      setSignature(null);
+      setWallet(trimmed);
+      return;
+    }
+    setWallet(null);
     setSignature(trimmed);
+  };
+  const scanMine = async () => {
+    const sol = (window as any)?.solana;
+    if (!sol) {
+      setSigInput(DEMO_WALLET);
+      setSignature(null);
+      setWallet(DEMO_WALLET);
+      return;
+    }
+    try {
+      await sol.connect();
+      const k = sol.publicKey.toString();
+      setSigInput(k);
+      setSignature(null);
+      setWallet(k);
+    } catch {
+      // the person closed the wallet prompt
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -287,12 +317,13 @@ export default function ProofClient({ initialSig }: { initialSig: string | null 
         <div style={microLabel}>verify a trade</div>
 
         <h1 className="proof-h1" style={{ margin: "16px 0 0", color: "var(--text-primary)" }}>
-          Did the trade give you what you paid for?
+          Did you get what you paid for?
         </h1>
 
         <p style={{ fontFamily: "Archivo, sans-serif", fontSize: "16px", lineHeight: 1.5, color: "var(--text-muted)", marginTop: "16px", maxWidth: "56ch" }}>
           Every trade on Solana leaves a public receipt. Paste one here and it reads what really moved
-          off the chain, then prices it against the real share.
+          off the chain, then prices it against the real share. Paste a wallet address instead, and it
+          reads every tokenized-stock trade that wallet ever made.
         </p>
 
         <form onSubmit={handleSubmit} className="proof-form" style={{ display: "flex", gap: "8px", margin: "28px 0" }}>
@@ -305,7 +336,7 @@ export default function ProofClient({ initialSig }: { initialSig: string | null 
                 submitSignature();
               }
             }}
-            placeholder="paste a receipt code from any Solana trade"
+            placeholder="paste a trade's receipt code, or a wallet address"
             spellCheck={false}
             rows={3}
             style={inputStyle}
@@ -323,10 +354,11 @@ export default function ProofClient({ initialSig }: { initialSig: string | null 
             animation: "proof-listening 1600ms ease-in-out infinite",
             // the zone only reserves a receipt's worth of height once there IS one to reserve;
             // before that it collapsed to a blank half-screen that read as a broken page
-            minHeight: signature ? undefined : "auto",
+            minHeight: signature || wallet ? undefined : "auto",
           }}
         >
-          {!signature && (
+          {wallet && <WalletBlock address={wallet} />}
+          {!signature && !wallet && (
             <div>
               <p style={{ ...dimText, marginBottom: "14px" }}>
                 Nothing to check yet. Paste a receipt code above, or try a real one:
@@ -354,6 +386,18 @@ export default function ProofClient({ initialSig }: { initialSig: string | null 
               <p style={{ ...dimText, marginTop: "12px", fontSize: "11px" }}>
                 a real $150 OpenAI purchase made on 24 September, read live off the chain
               </p>
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "18px" }}>
+                <button onClick={scanMine} style={buttonStyle}>Scan my wallet</button>
+                <button
+                  onClick={() => {
+                    setSigInput(DEMO_WALLET);
+                    setWallet(DEMO_WALLET);
+                  }}
+                  style={buttonStyle}
+                >
+                  Scan a real wallet
+                </button>
+              </div>
             </div>
           )}
 

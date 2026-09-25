@@ -1,4 +1,4 @@
-import { USDC_MINT, getToken } from "./tokens";
+import { USDC_MINT, getToken, referencePriceFor } from "./tokens";
 import { fetchPrices } from "./jupiter";
 
 // A single token account's balance move for one owner across a transaction, read straight off
@@ -23,6 +23,8 @@ export interface TxReconciliation {
   // run either way. It is not the route's fill cost.
   vsShareUsd: number;
   vsSharePct: number;
+  // what the reference is: the real share (public company) or the token's own price (private one)
+  referenceKind: "share" | "token";
   feeSol: number;
   blockTime: number | null;
   slot: number;
@@ -42,7 +44,7 @@ export async function fetchTransaction(signature: string): Promise<any> {
   return data.transaction;
 }
 
-function signerPubkey(tx: any): string | null {
+export function signerPubkey(tx: any): string | null {
   const keys = tx?.transaction?.message?.accountKeys;
   if (!Array.isArray(keys)) return null;
   const signer = keys.find((k: any) => k?.signer === true);
@@ -51,7 +53,7 @@ function signerPubkey(tx: any): string | null {
 
 // Every token-account balance change for one owner, keyed by account index so a newly created
 // associated token account (present only in postTokenBalances) still counts as a move from 0.
-function balanceChanges(tx: any, owner: string): TxBalanceChange[] {
+export function balanceChanges(tx: any, owner: string): TxBalanceChange[] {
   const pre = tx?.meta?.preTokenBalances ?? [];
   const post = tx?.meta?.postTokenBalances ?? [];
   const indices = new Set<number>([
@@ -111,9 +113,8 @@ export async function reconcileTransaction(signature: string): Promise<TxReconci
   const effectivePrice = usdcSpent / tokenReceived;
 
   const prices = await fetchPrices([received.mint]);
-  const price = prices[received.mint];
-  const referencePrice = price?.stockData?.price ?? price?.usdPrice;
-  if (!Number.isFinite(referencePrice)) {
+  const { price: referencePrice, kind: referenceKind } = referencePriceFor(received.mint, prices[received.mint]);
+  if (referencePrice === null) {
     throw new Error("no live reference price for this mint right now; refusing to reconcile");
   }
 
@@ -136,6 +137,7 @@ export async function reconcileTransaction(signature: string): Promise<TxReconci
     referencePrice: referencePrice as number,
     vsShareUsd,
     vsSharePct,
+    referenceKind,
     feeSol,
     blockTime: tx?.blockTime ?? null,
     slot: tx?.slot ?? 0,

@@ -143,7 +143,7 @@ function TicketRows({ quote, routeNames, amountUsd }: { quote: QuoteResult; rout
 
 // Paper on a dark page. The ticket redefines the page's colour tokens, so the limit line and the
 // issuer list inside it print in ink without knowing they are on paper.
-const TICKET_CSS = `
+export const TICKET_CSS = `
 .tk-h1{font-family:Archivo,sans-serif;font-weight:600;font-size:clamp(34px,4.2vw,56px);line-height:1.02;
   letter-spacing:-0.02em;color:var(--text-primary);margin:0 0 12px}
 .tk-lede{font-family:Archivo,sans-serif;font-size:clamp(16px,1.5vw,19px);line-height:1.45;color:var(--text-muted);

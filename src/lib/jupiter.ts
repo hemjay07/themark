@@ -1,5 +1,5 @@
 import type { IssuerControl, ParsedExtension, Price, QuoteResult, RouteLeg } from "./types";
-import { USDC_MINT, getToken } from "./tokens";
+import { USDC_MINT, getToken, referencePriceFor } from "./tokens";
 
 export type { ParsedExtension } from "./types";
 
@@ -291,9 +291,9 @@ export async function getQuote(
     const multiplier = resolvedMultiplier ?? 1;
 
     // usdPrice is the on-chain token price; stockData.price is the real share it references.
-    const referencePrice = price.stockData?.price ?? price.usdPrice;
+    const referencePrice = referencePriceFor(outputMint, price).price;
     const onChainPrice = price.usdPrice;
-    if (!Number.isFinite(referencePrice) || !Number.isFinite(onChainPrice)) {
+    if (referencePrice === null || !Number.isFinite(referencePrice) || !Number.isFinite(onChainPrice)) {
       // charter ban 1: a number that was not returned by this call does not go on the surface.
       console.error("Price read returned no usable number; refusing to quote.");
       return null;

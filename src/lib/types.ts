@@ -26,6 +26,8 @@ export interface Token {
   symbol: string;
   name: string;
   decimals: number;
+  // a public company with a share price (xStocks), or a private one with only a valuation mark
+  listed: boolean;
   logoURI?: string;
 }
 

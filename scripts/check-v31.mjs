@@ -5,13 +5,15 @@ const require = createRequire(process.env.HOME + "/.claude/surface/package.json"
 const { chromium } = require("playwright-core");
 
 const base = process.argv[2] || "http://localhost:3000";
+// the tool lives at /check since PRD-V4; the assertions are unchanged
+const tool = process.argv[3] || "/check";
 const fails = [];
 const check = (w, n, ok, what) => { if (!ok) fails.push(`${w} #${n} ${what}`); };
 const browser = await chromium.launch({ channel: "chrome" }).catch(() => chromium.launch());
 
 for (const width of [1440, 390]) {
   const page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
-  await page.goto(base + "/", { waitUntil: "domcontentloaded", timeout: 45000 });
+  await page.goto(base + tool, { waitUntil: "domcontentloaded", timeout: 45000 });
   // wait for the advice to finish its live checks (it can queue behind other reads on a 1 req/s key)
   for (let i = 0; i < 40; i++) {
     await page.waitForTimeout(1000);

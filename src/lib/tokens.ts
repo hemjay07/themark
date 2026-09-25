@@ -4,19 +4,33 @@ import type { Token } from "./types";
 // Liquidity and price are NOT stored here: they are read live per quote (charter ban 1).
 export const TOKEN_LIST: Token[] = [
   // xStocks, Token-2022 with a scaled UI multiplier
-  { mint: "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W", symbol: "SPYx", name: "SP500 xStock", decimals: 8 },
-  { mint: "XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp", symbol: "AAPLx", name: "Apple xStock", decimals: 8 },
-  { mint: "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB", symbol: "TSLAx", name: "Tesla xStock", decimals: 8 },
-  { mint: "XshPgPdXFRWB8tP1j82rebb2Q9rPgGX37RuqzohmArM", symbol: "INTCx", name: "Intel xStock", decimals: 8 },
-  { mint: "XsoBhf2ufR8fTyNSjqfU71DYGaE6Z3SUGAidpzriAA4", symbol: "PLTRx", name: "Palantir xStock", decimals: 8 },
+  { mint: "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W", symbol: "SPYx", name: "SP500 xStock", decimals: 8, listed: true },
+  { mint: "XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp", symbol: "AAPLx", name: "Apple xStock", decimals: 8, listed: true },
+  { mint: "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB", symbol: "TSLAx", name: "Tesla xStock", decimals: 8, listed: true },
+  { mint: "XshPgPdXFRWB8tP1j82rebb2Q9rPgGX37RuqzohmArM", symbol: "INTCx", name: "Intel xStock", decimals: 8, listed: true },
+  { mint: "XsoBhf2ufR8fTyNSjqfU71DYGaE6Z3SUGAidpzriAA4", symbol: "PLTRx", name: "Palantir xStock", decimals: 8, listed: true },
 
   // Tessera t-tokens
-  { mint: "oPAiAikWTaFj9RYoRFD35ccfwhnMcB3ThgBZRHSkjTZ", symbol: "tOpenAI", name: "T-OpenAI", decimals: 9 },
-  { mint: "TKLSidmLVt3cqGaaodG8tyRzoANfQwoh67AccjmubeZ", symbol: "tKalshi", name: "T-Kalshi", decimals: 9 },
-  { mint: "TSPXcLV76s6V2zDiZQ18kBfcbnjaE2ZzNT3ga2Pd99v", symbol: "tSpaceX", name: "T-SpaceX", decimals: 9 },
+  { mint: "oPAiAikWTaFj9RYoRFD35ccfwhnMcB3ThgBZRHSkjTZ", symbol: "tOpenAI", name: "T-OpenAI", decimals: 9, listed: false },
+  { mint: "TKLSidmLVt3cqGaaodG8tyRzoANfQwoh67AccjmubeZ", symbol: "tKalshi", name: "T-Kalshi", decimals: 9, listed: false },
+  { mint: "TSPXcLV76s6V2zDiZQ18kBfcbnjaE2ZzNT3ga2Pd99v", symbol: "tSpaceX", name: "T-SpaceX", decimals: 9, listed: false },
 ];
 
 export const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"; // verified against Jupiter token search, 2026-09-22
+
+// What a token is measured against. A public company's token is priced against the real share. A
+// private company's token has only a valuation mark, and trades far from it (Kalshi: token $446,
+// mark $882 on 2026-09-24), so it is priced against its own market price, and the surface says so.
+export function referencePriceFor(
+  mint: string,
+  price: { usdPrice: number; stockData?: { price: number } } | undefined
+): { price: number | null; kind: "share" | "token" } {
+  const finite = (n: unknown) => (typeof n === "number" && Number.isFinite(n) ? n : null);
+  if (!price) return { price: null, kind: "share" };
+  const t = getToken(mint);
+  if (t && !t.listed) return { price: finite(price.usdPrice), kind: "token" };
+  return { price: finite(price.stockData?.price ?? price.usdPrice), kind: "share" };
+}
 
 export function getToken(mint: string): Token | undefined {
   return TOKEN_LIST.find((t) => t.mint === mint);
