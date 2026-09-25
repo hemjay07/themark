@@ -46,7 +46,7 @@ export default function LimitLine({
     <div
       style={{
         width: "100%",
-        padding: "22px 0 18px",
+        padding: onLimitChange ? "38px 0 18px" : "22px 0 18px",
         fontFamily: '"JetBrains Mono", monospace',
       }}
     >
@@ -179,9 +179,13 @@ export default function LimitLine({
 
       <style dangerouslySetInnerHTML={{
         __html: `
-          .ll-edit{cursor:text;pointer-events:auto}
-          .ll-edit input{width:5.2ch;background:transparent;border:none;border-bottom:2px solid currentColor;border-radius:0;color:inherit;
-            font:inherit;letter-spacing:0;text-align:right;padding:0 1px;outline:none;-moz-appearance:textfield}
+          /* the limit reads as a field: a box on the line with a pen, not an underlined number (founder, 2026-09-25) */
+          .ll-edit{cursor:text;pointer-events:auto;display:inline-flex;align-items:center;gap:6px;padding:5px 8px 5px 10px;
+            border:1.5px solid currentColor;border-radius:3px;background:#F3EEE2;box-shadow:0 1px 0 rgba(23,20,15,.12)}
+          .ll-edit::after{content:"edit";font-size:10px;letter-spacing:.08em;opacity:.75;border-bottom:1px solid currentColor;margin-left:2px}
+          .ll-edit:hover,.ll-edit:focus-within{box-shadow:0 0 0 3px rgba(196,44,28,.18)}
+          .ll-edit input{width:5.2ch;background:transparent;border:none;border-radius:0;color:inherit;
+            font:inherit;font-size:14px;font-weight:700;letter-spacing:0;text-align:right;padding:0 1px;outline:none;-moz-appearance:textfield}
           .ll-edit input::-webkit-outer-spin-button,.ll-edit input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
           @keyframes seal-in {
             from { opacity: 0; transform: rotate(-7deg) scale(1.6); }
