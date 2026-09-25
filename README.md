@@ -33,24 +33,28 @@ minute. None of it is visible before you sign.
 
 ## What this does
 
-Three pages, all reading live.
+Four pages, all reading live.
 
-**`/`: check an order.** Pick a stock, an amount and a limit. The page shows the extra cost of that
-exact order in dollars: the price impact Jupiter returns for it, plus any Token-2022 transfer fee.
-If the cost is over your limit, the trade is blocked and the page says what to do instead:
-- buy less, with a one-click amount that passed two fresh quotes;
-- split the order into three;
-- what the same money costs in another stock.
+**`/`: the story.** Nine screens, one statement each: the same $25,000 order priced across all eight
+stocks, the count of tokens whose issuer can take them out of your wallet, a real purchase priced off
+the chain. Every figure is live or carries its date.
 
-It also lists what the issuer can do to your tokens, read from the mint. When a trade you place here
-lands, the app opens that trade on `/proof`.
+**`/check`: check an order.** Pick a stock, an amount and a limit. The order prints on a ticket with
+the extra cost of that exact order in dollars: the price impact Jupiter returns for it, plus any
+Token-2022 transfer fee. Over your limit it is stamped BLOCKED and never reaches your wallet; under
+it, CLEARS, and your wallet signs. When blocked, the page offers the largest size that fits (checked
+twice), a split into three, and a cheaper stock. The issuer's powers over the token are read from the
+mint. A trade you place here opens its own `/proof` page when it lands.
 
 **`/census`: compare stocks.** Every tokenized stock we track, at $500, $5,000 and $25,000, ranked by
 what the fill costs. One shared reading, refreshed every two minutes, with its age shown on the page.
 
-**`/proof`: verify a trade.** Give it a transaction signature and it reads that transaction off
-Solana, decodes what actually moved from the pre and post token balances, and prices it against the
-real share, with the Solscan link so you can check it yourself.
+**`/proof`: were you the mark?** Paste a trade's signature, or a wallet address. A signature is read
+off Solana, decoded from the pre and post token balances, and priced against the real share. A wallet
+gets every tokenized-stock trade it ever made, priced the same way and totalled, then what it holds
+now and what selling it all today would cost. Nothing is stored. Public companies are measured against
+the real share price; private ones (OpenAI, Kalshi, SpaceX) against the token's own price, because
+their "stock price" is a valuation mark the token trades far from, and the page says which it used.
 
 ## The on-chain finding
 
@@ -83,9 +87,11 @@ npm test             # unit tests for the cost math
 npm run build && npm start
 ```
 
-Optional: set `SOLANA_RPC_URL` to a private RPC. Without it the app uses the public mainnet
-endpoint, which is rate-limited and slow. The mint and transaction reads go through this app's own
-server routes (`/api/mint`, `/api/tx`) because the public RPC refuses browser-origin requests.
+Optional: set `SOLANA_RPC_URL` to a private RPC. Without it the app rotates between two public
+endpoints (`src/lib/solanaRpc.ts`): the default mainnet endpoint allows about ten transaction reads
+per ten seconds, publicnode reads thirty in under two seconds but needs a token for address history.
+Chain reads go through this app's own routes (`/api/mint`, `/api/tx`, `/api/wallet`) because the
+public endpoints refuse browser-origin requests.
 
 Set `JUPITER_API_KEY` (a free key from the Jupiter portal) on the server. Every Jupiter call goes
 through `/api/jup` and a paced queue (`src/lib/jupServer.ts`), so the key never reaches the browser
@@ -98,6 +104,7 @@ extensions and transactions, Solana web3.js loaded only at signing time.
 
 ## Status
 
-Built and tested. The cost math has unit tests (`npm test`), and the acceptance scripts in
-`scripts/` pass against live data at 390px and 1440px. Not yet proven: a trade signed through this
+Built and tested. The cost math has unit tests (`npm test`), and the four acceptance scripts in
+`scripts/` (`check-v3`, `check-v31`, `check-proof`, `check-v4`) pass against live data at 390px and
+1440px. Not yet proven: a trade signed through this
 app on mainnet.
