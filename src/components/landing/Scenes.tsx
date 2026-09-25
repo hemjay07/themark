@@ -242,11 +242,20 @@ export function SceneInstead({ worst, best, worst5k }: { worst: Row | null; best
   return (
     <Scene id="instead" index={6} kicker="Blocked isn't the end">
       <div className="split">
-        <h2 className="big rv wipe">
-          A no,
-          <br />
-          <span className="dim">with a way through.</span>
-        </h2>
+        <div>
+          <h2 className="big rv wipe">
+            A no,
+            <br />
+            <span className="dim">with a way through.</span>
+          </h2>
+          <p className="body rv" style={{ ["--d" as string]: "140ms" }}>
+            A guard that only says no is half a product. When an order is blocked, THE MARK finds the largest size that
+            fits, the split that saves, and the stock that costs less, each with a live figure, and one click uses it.
+          </p>
+          <a className="btn-ghost rv" style={{ ["--d" as string]: "240ms" }} href="/check">
+            Try it on an order <span aria-hidden>→</span>
+          </a>
+        </div>
         <div className="stubs">
           {stubs.map((s, i) => (
             <div key={s.t} className="stub rv" style={{ ["--d" as string]: `${120 + i * 120}ms` }}>
