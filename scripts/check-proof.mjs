@@ -1,7 +1,7 @@
 // Ledger check: the /proof demo path must succeed on a cold browser. Exits 0 only if the example
 // trade reconciles and shows what was paid, and nothing on the page says REFUSED.
 import { createRequire } from "node:module";
-const require = createRequire(process.env.HOME + "/.claude/surface/package.json");
+const require = createRequire(import.meta.url);
 const { chromium } = require("playwright-core");
 const base = process.argv[2] || "http://localhost:3000";
 const b = await chromium.launch({ channel: "chrome" }).catch(() => chromium.launch());

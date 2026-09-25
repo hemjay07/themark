@@ -1,7 +1,7 @@
 // Acceptance for design/PRD-V4-LANDING.md: the story at / and the tool at /check, in a real browser at
 // 1440 and 390. Exits 0 only if every check holds. Usage: node scripts/check-v4.mjs http://localhost:3000
 import { createRequire } from "node:module";
-const require = createRequire(process.env.HOME + "/.claude/surface/package.json");
+const require = createRequire(import.meta.url);
 const { chromium } = require("playwright-core");
 const base = process.argv[2] || "http://localhost:3000";
 const fails = [];

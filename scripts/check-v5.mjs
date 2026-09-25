@@ -1,7 +1,7 @@
 // Acceptance for design/PRD-V5-ONE-INSTRUMENT.md, in a real browser at 1440 and 390.
 // Usage: node scripts/check-v5.mjs http://localhost:3000
 import { createRequire } from "node:module";
-const require = createRequire(process.env.HOME + "/.claude/surface/package.json");
+const require = createRequire(import.meta.url);
 const { chromium } = require("playwright-core");
 const base = process.argv[2] || "http://localhost:3000";
 const DEMO_WALLET = "6CtLg5reXUya6bdxG14iHzYFxeJw2FAhm2evq93TTyBH";

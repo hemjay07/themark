@@ -1,13 +1,31 @@
-design/shots/
-design/.dirty
-design/.proof-tries
-design/.serve.log
-design/specimen-*.png
-
+# Dependencies
 node_modules/
+
+# Build artifacts
 .next/
-dist/
-tsconfig.tsbuildinfo
-.env*.local
 .next-*/
+dist/
+build/
+tsconfig.tsbuildinfo
+*.log
+.DS_Store
+
+# Secrets
+.env
+.env.local
+.env*.local
+
+# Deploy
 .vercel
+
+# Local
+design/
+research/
+PRD.md
+PLAN.md
+ARCHITECTURE.md
+PROGRESS.md
+PULSE.md
+pipeline-log.md
+.tasks.jsonl
+.deploy-state.json

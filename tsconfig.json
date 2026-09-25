@@ -39,7 +39,9 @@
     ".next-main/types/**/*.ts",
     ".next-brand/types/**/*.ts",
     ".next-mine/types/**/*.ts",
-    ".next-feat/types/**/*.ts"
+    ".next-feat/types/**/*.ts",
+    ".next-fold/types/**/*.ts",
+    ".next-dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

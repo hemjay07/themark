@@ -1,7 +1,7 @@
 // Acceptance for design/ASSESS-3.md plan V3.1, in a real browser at 1440 and 390.
 // Exits 0 only if every check holds at both widths. Usage: node scripts/check-v31.mjs http://localhost:3000
 import { createRequire } from "node:module";
-const require = createRequire(process.env.HOME + "/.claude/surface/package.json");
+const require = createRequire(import.meta.url);
 const { chromium } = require("playwright-core");
 
 const base = process.argv[2] || "http://localhost:3000";

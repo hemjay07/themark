@@ -1,9 +1,0 @@
-# design/surfaces.yaml -- one entry per route. headline: the one line the surface exists to say;
-# it must be the largest text once allow_larger is set aside.
-surfaces:
-  - route: "/"
-    headline: "this order pays 1.41% over the share"
-  - route: "/census"
-    headline: "the gap is 0.20%, the fill is up to 9x larger"
-  - route: "/proof"
-    headline: "this receipt came off the chain, not off this page"
