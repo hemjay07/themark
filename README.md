@@ -33,28 +33,32 @@ minute. None of it is visible before you sign.
 
 ## What this does
 
-Four pages, all reading live.
+One product, three instruments, and a story that sells them.
 
-**`/`: the story.** Nine screens, one statement each: the same $25,000 order priced across all eight
-stocks, the count of tokens whose issuer can take them out of your wallet, a real purchase priced off
-the chain. Every figure is live or carries its date.
+**`/`: the story.** Nine screens that snap one at a time: the ticket printing and being stamped
+BLOCKED, then cut to the size that fits and stamped CLEARS; the gap everyone charts against the
+live fill; the field as a strip of paper stubs you scroll along; the count of tokens whose issuer
+can take them from your wallet; a real purchase priced off the chain. Every figure is live or
+carries its date.
 
-**`/check`: check an order.** Pick a stock, an amount and a limit. The order prints on a ticket with
-the extra cost of that exact order in dollars: the price impact Jupiter returns for it, plus any
-Token-2022 transfer fee. Over your limit it is stamped BLOCKED and never reaches your wallet; under
-it, CLEARS, and your wallet signs. When blocked, the page offers the largest size that fits (checked
-twice), a split into three, and a cheaper stock. The issuer's powers over the token are read from the
-mint. A trade you place here opens its own `/proof` page when it lands.
+**`/check`: Check.** The ticket is the app. The stock is a row of stubs across its top, each with
+its live cost; the amount is on the amount line; your limit is typed into the line's own label.
+Then what the order costs, the line, the stamp. Blocked, the foot offers **Cut to $X**, the largest
+size that fits (the ticket tears and the smaller one is revealed), and **Watch the line**: the
+order is re-quoted every 30 seconds and the ticket clears, with a browser notification, the
+moment it fits. Clears, the foot places the order. The other ways out (a split, a cheaper stock)
+hang off the ticket as torn stubs. A ticket is a link: its stock, amount and limit live in the URL.
 
-**`/census`: compare stocks.** Every tokenized stock we track, at $500, $5,000 and $25,000, ranked by
-what the fill costs. One shared reading, refreshed every two minutes, with its age shown on the page.
+**`/census`: Compare.** The field against your line: every stock at $500, $5,000 and $25,000 as
+bars drawn against the limit you set, red over it, green under, with the finding in a sentence.
+One shared reading, refreshed every two minutes, with its age on the page.
 
-**`/proof`: were you the mark?** Paste a trade's signature, or a wallet address. A signature is read
-off Solana, decoded from the pre and post token balances, and priced against the real share. A wallet
-gets every tokenized-stock trade it ever made, priced the same way and totalled, then what it holds
-now and what selling it all today would cost. Nothing is stored. Public companies are measured against
-the real share price; private ones (OpenAI, Kalshi, SpaceX) against the token's own price, because
-their "stock price" is a valuation mark the token trades far from, and the page says which it used.
+**`/proof`: Verify.** One box takes a trade's receipt code or a wallet address. A trade prints as a
+receipt on paper, priced against the real share. A wallet prints as a ledger: every tokenized-stock
+trade it made, priced and totalled, a verdict stamped against a 1% line, what it holds now and the
+toll for selling it all today. Public companies are measured against the real share price; private
+ones (OpenAI, Kalshi, SpaceX) against the token's own price, and the page says which. Nothing is
+stored.
 
 ## The on-chain finding
 
@@ -104,7 +108,7 @@ extensions and transactions, Solana web3.js loaded only at signing time.
 
 ## Status
 
-Built and tested. The cost math has unit tests (`npm test`), and the four acceptance scripts in
-`scripts/` (`check-v3`, `check-v31`, `check-proof`, `check-v4`) pass against live data at 390px and
-1440px. Not yet proven: a trade signed through this
+Built and tested. The cost math has unit tests (`npm test`), and the five acceptance scripts in
+`scripts/` (`check-v3`, `check-v31`, `check-proof`, `check-v4`, `check-v5`) pass against live data
+at 390px and 1440px. The design record is in `design/` (PRD-V5, CREATIVE, the assessments). Not yet proven: a trade signed through this
 app on mainnet.
